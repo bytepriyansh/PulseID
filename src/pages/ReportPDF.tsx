@@ -109,8 +109,8 @@ const styles = StyleSheet.create({
         bottom: 20,
         left: 40,
         right: 40,
-        fontSize: 8,
-        color: '#9CA3AF',
+        fontSize: 12,
+        color: '#191c20',
         textAlign: 'center'
     }
 });
