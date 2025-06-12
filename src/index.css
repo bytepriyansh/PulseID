@@ -1,0 +1,83 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Medical-themed design system for PulseID */
+
+@layer base {
+  :root {
+    --background: 248 250 252;
+    --foreground: 15 23 42;
+
+    --card: 255 255 255;
+    --card-foreground: 15 23 42;
+
+    --popover: 255 255 255;
+    --popover-foreground: 15 23 42;
+
+    --primary: 14 165 233;
+    --primary-foreground: 255 255 255;
+
+    --secondary: 226 232 240;
+    --secondary-foreground: 15 23 42;
+
+    --muted: 248 250 252;
+    --muted-foreground: 100 116 139;
+
+    --accent: 16 185 129;
+    --accent-foreground: 255 255 255;
+
+    --destructive: 239 68 68;
+    --destructive-foreground: 255 255 255;
+
+    --border: 226 232 240;
+    --input: 226 232 240;
+    --ring: 14 165 233;
+
+    --radius: 12px;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-inter;
+  }
+}
+
+@layer components {
+  .medical-card {
+    @apply bg-white rounded-xl shadow-sm border border-slate-200 p-6;
+  }
+  
+  .medical-input {
+    @apply w-full px-4 py-3 rounded-lg border border-slate-200 bg-white focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-all duration-200;
+  }
+  
+  .medical-button {
+    @apply px-6 py-3 rounded-lg font-medium transition-all duration-200 focus:ring-2 focus:ring-offset-2;
+  }
+  
+  .medical-button-primary {
+    @apply medical-button bg-sky-500 text-white hover:bg-sky-600 focus:ring-sky-500;
+  }
+  
+  .medical-button-secondary {
+    @apply medical-button bg-emerald-500 text-white hover:bg-emerald-600 focus:ring-emerald-500;
+  }
+  
+  .risk-badge-high {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800;
+  }
+  
+  .risk-badge-medium {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800;
+  }
+  
+  .risk-badge-low {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800;
+  }
+}
