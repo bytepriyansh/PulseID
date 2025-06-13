@@ -162,7 +162,7 @@ const Home = () => {
         </div>
       </section>
 
-      <footer className="bg-slate-800 text-white py-12 px-4">
+      <footer className="bg-slate-700 text-white py-12 px-4">
         <div className="max-w-7xl mx-auto text-center">
           <div className="flex items-center justify-center space-x-2 mb-4">
             <div className="flex items-center justify-center w-8 h-8 bg-gradient-to-r from-sky-500 to-emerald-500 rounded-lg">
@@ -176,10 +176,7 @@ const Home = () => {
           
           <div className="flex items-center justify-center space-x-6 text-sm text-slate-400">
             <span>Built with ❤️ for healthcare</span>
-            <div className="flex items-center space-x-1">
-              <Github className="w-4 h-4" />
-              <span>Open Source</span>
-            </div>
+          
           </div>
           
           <div className="mt-8 pt-8 border-t border-slate-700 text-sm text-slate-400">

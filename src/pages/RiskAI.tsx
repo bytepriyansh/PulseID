@@ -26,114 +26,129 @@ interface AnalysisResult {
   actions?: string[];
   guidelines?: string[];
   completedAt?: string;
+  detailedAnalysis?: string;
 }
 
 const RiskAI = () => {
   const { profileData, isProfileComplete } = useProfile();
   const router = useNavigate();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [showResults, setShowResults] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult>({});
   const [streamedText, setStreamedText] = useState('');
 
   const parseGeminiResponse = (text: string): AnalysisResult => {
     try {
-      const riskLevelMatch = text.match(/Primary Risk Level:\s*(Low|Moderate|High)/i);
+      const riskLevelMatch = text.match(/Risk Level:\s*(Low|Moderate|High)/i);
 
-      const summaryMatch = text.match(/Clinical Risk Analysis Report[^\n]*(.*?)(?=\n##)/is);
+      const summaryMatch = text.match(/Summary:([\s\S]*?)(?=\n###|\n##|\n---|\n\*\*)/i);
 
-      const concernsMatch = text.match(/Risk Factors & Concerns:([\s\S]*?)(?=\n---|\n##)/i);
-
+      const concernsMatch = text.match(/Concerns:([\s\S]*?)(?=\n###|\n##|\n---|\n\*\*)/i);
       const concerns = concernsMatch?.[1]
-        .split('\n')
-        .map(line => line.replace(/^\*\*[^:]+\*\*:\s*/, '').trim())
-        .filter(line => line.length > 0);
+        ?.split('\n')
+        .map(line => line.replace(/^[-•*]\s*/, '').trim())
+        .filter(line => line.length > 0) || [];
+
+      const actionsMatch = text.match(/Recommended Actions:([\s\S]*?)(?=\n###|\n##|\n---|\n\*\*)/i);
+      const actions = actionsMatch?.[1]
+        ?.split('\n')
+        .map(line => line.replace(/^[-•*]\s*/, '').trim())
+        .filter(line => line.length > 0) || [];
 
       return {
         riskLevel: riskLevelMatch ? riskLevelMatch[1] : 'Unknown',
         summary: summaryMatch ? summaryMatch[1].trim() : text,
-        concerns: concerns || [],
+        concerns,
+        actions,
+        detailedAnalysis: text,
         completedAt: new Date().toLocaleString()
       };
     } catch (error) {
-      console.error('Error parsing Gemini response:', error);
+      console.error('Error parsing response:', error);
       return {
         riskLevel: 'Error',
         summary: text,
-        completedAt: new Date().toLocaleString()
+        completedAt: new Date().toLocaleString(),
+        detailedAnalysis: text
       };
     }
   };
 
   const handleRunAnalysis = async () => {
     if (!isProfileComplete()) {
-      alert('Please complete your medical profile first to get accurate analysis results.');
+      toast.error('Please complete your medical profile first');
       router('/dashboard');
       return;
     }
 
     setIsAnalyzing(true);
     setStreamedText('');
-    setShowResults(false);
+    setAnalysisResult({});
 
     try {
-      const prompt = `You are a medical AI expert assistant. Given the following patient profile, perform a clinical risk analysis and return a summary in a structured, easy-to-understand format. Include:
+      const prompt = `Act as a medical expert AI. Analyze this patient profile and provide a comprehensive risk assessment:
 
-1. Primary Risk Level (Low, Moderate, High)
-2. Risk Factors & Concerns
-3. Recommended Immediate Actions
-4. Emergency Medical Guidelines
-
-Format the output in professional medical report style. Use emojis for section headers to improve readability.
-
-Patient Profile:
+Patient Data:
 - Name: ${profileData.name}
 - Age: ${profileData.age}
 - Gender: ${profileData.gender}
 - Blood Group: ${profileData.bloodGroup}
-- Medical Conditions: ${profileData.conditions || 'None reported'}
-- Medications: ${profileData.medications || 'None reported'}
-- Allergies: ${profileData.allergies || 'None reported'}
-- Symptoms: ${profileData.symptoms || 'None reported'}
-- Emergency Contact: ${profileData.emergencyContactName} (${profileData.emergencyContactNumber})
+- Conditions: ${profileData.conditions || 'None'}
+- Medications: ${profileData.medications || 'None'}
+- Allergies: ${profileData.allergies || 'None'}
+- Symptoms: ${profileData.symptoms || 'None'}
 
-Please analyze this data and generate a comprehensive clinical summary. The output should be suitable for patient-facing apps and medical staff.`;
+Provide output in this structured format:
+
+### Risk Level: [Low/Moderate/High]
+### Summary: [2-3 sentence overview]
+### Concerns: [bullet points]
+### Recommended Actions: [bullet points]
+### Detailed Analysis: [in-depth markdown formatted analysis]`;
 
       let fullResponse = '';
-
       await streamRiskAnalysis(prompt, (chunk) => {
         fullResponse += chunk;
         setStreamedText(fullResponse);
       });
 
-      const parsedResult = parseGeminiResponse(fullResponse);
-      setAnalysisResult(parsedResult);
-      setShowResults(true);
+      setAnalysisResult(parseGeminiResponse(fullResponse));
     } catch (error) {
       console.error('Analysis failed:', error);
       setAnalysisResult({
         riskLevel: 'Error',
-        summary: 'Analysis failed. Please check your connection and try again.',
+        summary: 'Analysis failed. Please try again.',
         completedAt: new Date().toLocaleString()
       });
-      setShowResults(true);
     } finally {
       setIsAnalyzing(false);
     }
   };
 
   const getRiskBadge = (riskLevel?: string) => {
-    if (!riskLevel) return null;
+    const baseClasses = "px-3 py-1 rounded-full text-sm font-bold uppercase tracking-wide";
 
-    switch (riskLevel.toLowerCase()) {
+    switch (riskLevel?.toLowerCase()) {
       case 'high':
-        return <span className="risk-badge-high">🛑 HIGH RISK</span>;
+        return <span className={`${baseClasses} bg-red-100 text-red-800`}>🛑 High Risk</span>;
       case 'moderate':
-        return <span className="risk-badge-moderate">⚠️ MODERATE RISK</span>;
+        return <span className={`${baseClasses} bg-yellow-100 text-yellow-800`}>⚠️ Moderate Risk</span>;
       case 'low':
-        return <span className="risk-badge-low">✅ LOW RISK</span>;
+        return <span className={`${baseClasses} bg-green-100 text-green-800`}>✅ Low Risk</span>;
       default:
-        return <span className="risk-badge-unknown">❓ UNKNOWN RISK</span>;
+        return <span className={`${baseClasses} bg-gray-100 text-gray-800`}>❓ Unknown Risk</span>;
+    }
+  };
+
+  const getRiskCardClasses = (riskLevel?: string) => {
+    switch (riskLevel?.toLowerCase()) {
+      case 'high':
+        return 'border-red-500 bg-gradient-to-r from-red-50 to-red-100';
+      case 'moderate':
+        return 'border-yellow-500 bg-gradient-to-r from-yellow-50 to-yellow-100';
+      case 'low':
+        return 'border-green-500 bg-gradient-to-r from-green-50 to-green-100';
+      default:
+        return 'border-gray-500 bg-gradient-to-r from-gray-50 to-gray-100';
     }
   };
 
@@ -145,22 +160,22 @@ Please analyze this data and generate a comprehensive clinical summary. The outp
             <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
               <Brain className="w-7 h-7 text-white" />
             </div>
-            <h1 className="text-3xl font-bold text-slate-800">RiskAI Health Analysis</h1>
+            <h1 className="text-3xl font-bold text-slate-800">Health Risk Assessment</h1>
           </div>
           <p className="text-lg text-slate-600 max-w-2xl mx-auto">
-            Advanced AI-powered health risk assessment using your medical profile data
+            AI-powered analysis of your medical profile to identify potential health risks
           </p>
         </div>
 
         {!isProfileComplete() && (
-          <div className="medical-card mb-8 bg-gradient-to-r from-orange-50 to-red-50 border-orange-200">
+          <div className="bg-gradient-to-r from-orange-50 to-red-50 border-l-4 border-orange-500 p-4 mb-8 rounded-r-lg">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
                 <AlertTriangle className="w-6 h-6 text-orange-500" />
                 <div>
                   <h3 className="text-lg font-semibold text-orange-800">Profile Incomplete</h3>
                   <p className="text-orange-700">
-                    Complete your medical profile to get accurate AI analysis results.
+                    Complete your medical profile for accurate analysis
                   </p>
                 </div>
               </div>
@@ -174,255 +189,206 @@ Please analyze this data and generate a comprehensive clinical summary. The outp
             </div>
           </div>
         )}
-        <div className="bg-white rounded-3xl shadow-xl p-8 mb-10 space-y-8 border border-slate-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <User className="w-6 h-6 text-slate-600" />
-              <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">Current Profile Summary</h2>
-            </div>
-            <div className={`px-4 py-1.5 rounded-full text-sm font-bold uppercase tracking-wide ${isProfileComplete() ? 'bg-green-200 text-green-900' : 'bg-orange-200 text-orange-900'
+
+        <div className="bg-white rounded-xl shadow-md p-6 mb-8 border border-slate-200">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-slate-800 flex items-center">
+              <User className="w-6 h-6 text-slate-600 mr-2" />
+              Patient Profile Summary
+            </h2>
+            <span className={`px-3 py-1 rounded-full text-sm font-medium ${isProfileComplete() ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
               }`}>
               {isProfileComplete() ? 'Complete' : 'Incomplete'}
+            </span>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <ProfileDetail label="Name" value={profileData.name} />
+              <ProfileDetail label="Age" value={profileData.age} />
+              <ProfileDetail label="Gender" value={profileData.gender} />
+              <ProfileDetail label="Blood Type" value={profileData.bloodGroup} />
+            </div>
+            <div className="space-y-4">
+              <ProfileDetail label="Conditions" value={profileData.conditions || 'None'} />
+              <ProfileDetail label="Medications" value={profileData.medications || 'None'} />
+              <ProfileDetail label="Allergies" value={profileData.allergies || 'None'} />
+              <ProfileDetail label="Symptoms" value={profileData.symptoms || 'None'} />
             </div>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-8 text-lg font-semibold text-slate-800">
-            <div className="space-y-5">
-              <div className="flex justify-between">
-                <span className="text-slate-600 font-bold">Name:</span>
-                <span>{profileData.name || 'Not provided'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-600 font-bold">Age:</span>
-                <span>{profileData.age ? `${profileData.age} years` : 'Not provided'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-600 font-bold">Gender:</span>
-                <span>{profileData.gender || 'Not provided'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-600 font-bold">Blood Type:</span>
-                <span>{profileData.bloodGroup || 'Not provided'}</span>
-              </div>
-            </div>
-
-            <div className="space-y-5">
-              <div>
-                <span className="text-slate-600 font-bold block">Conditions:</span>
-                <p className="mt-1">{profileData.conditions || 'None reported'}</p>
-              </div>
-              <div>
-                <span className="text-slate-600 font-bold block">Medications:</span>
-                <p className="mt-1">{profileData.medications || 'None reported'}</p>
-              </div>
-              <div>
-                <span className="text-slate-600 font-bold block">Allergies:</span>
-                <p className="mt-1">{profileData.allergies || 'None reported'}</p>
-              </div>
-              <div>
-                <span className="text-slate-600 font-bold block">Symptoms:</span>
-                <p className="mt-1">{profileData.symptoms || 'None reported'}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Emergency Contact */}
           {profileData.emergencyContactName && (
-            <div className="pt-6 border-t border-slate-300">
-              <div className="flex items-center space-x-3 mb-2">
-                <AlertTriangle className="w-5 h-5 text-red-600" />
-                <span className="text-lg font-bold text-red-700 uppercase tracking-wide">Emergency Contact</span>
-              </div>
-              <p className="text-lg font-semibold text-slate-800">
-                {profileData.emergencyContactName} — {profileData.emergencyContactNumber}
+            <div className="mt-6 pt-6 border-t border-slate-200">
+              <h3 className="text-lg font-semibold text-slate-800 flex items-center">
+                <AlertTriangle className="w-5 h-5 text-red-500 mr-2" />
+                Emergency Contact
+              </h3>
+              <p className="text-slate-700 mt-1">
+                {profileData.emergencyContactName} - {profileData.emergencyContactNumber}
               </p>
             </div>
           )}
         </div>
 
-
-
-        {!showResults && (
+        {!analysisResult.riskLevel && (
           <div className="text-center mb-8">
             <button
               onClick={handleRunAnalysis}
               disabled={isAnalyzing || !isProfileComplete()}
-              className={`flex items-center space-x-3 mx-auto px-8 py-4 rounded-xl font-medium text-lg transition-all duration-200 ${isAnalyzing || !isProfileComplete()
-                ? 'bg-gradient-to-r from-purple-400 to-pink-400 text-white cursor-not-allowed opacity-60'
-                : 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 shadow-lg hover:shadow-xl transform hover:scale-105'
+              className={`flex items-center justify-center space-x-3 mx-auto px-8 py-4 rounded-xl text-lg font-medium transition-all ${isAnalyzing || !isProfileComplete()
+                ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                : 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:shadow-lg'
                 }`}
             >
               <Brain className="w-6 h-6" />
-              <span>
-                {isAnalyzing ? 'Analyzing...' : 'Run Risk Analysis with AI'}
-              </span>
+              <span>{isAnalyzing ? 'Analyzing...' : 'Run AI Risk Assessment'}</span>
               {isAnalyzing && (
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
               )}
             </button>
-
-            {isAnalyzing && (
-              <div className="mt-4">
-                <div className="w-64 mx-auto bg-gray-200 rounded-full h-2">
-                  <div className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full animate-pulse" style={{ width: '60%' }}></div>
-                </div>
-                <p className="text-sm text-slate-600 mt-2">Processing medical data for {profileData.name}...</p>
-              </div>
-            )}
           </div>
         )}
 
-        {showResults && (
+        {analysisResult.riskLevel && (
           <div className="space-y-6 animate-fade-in">
-            <div className={`medical-card border-l-4 ${analysisResult.riskLevel?.toLowerCase() === 'high'
-              ? 'border-red-500 bg-gradient-to-r from-red-50 to-red-100'
-              : analysisResult.riskLevel?.toLowerCase() === 'moderate'
-                ? 'border-yellow-500 bg-gradient-to-r from-yellow-50 to-yellow-100'
-                : 'border-green-500 bg-gradient-to-r from-green-50 to-green-100'
-              }`}>
-              <div className="flex items-center space-x-3 mb-4">
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${analysisResult.riskLevel?.toLowerCase() === 'high'
-                  ? 'bg-red-500'
-                  : analysisResult.riskLevel?.toLowerCase() === 'moderate'
-                    ? 'bg-yellow-500'
-                    : 'bg-green-500'
-                  }`}>
-                  <AlertTriangle className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-slate-800">Risk Assessment for {profileData.name}</h3>
-                  {getRiskBadge(analysisResult.riskLevel)}
+            <div className={`rounded-xl border-l-4 p-6 ${getRiskCardClasses(analysisResult.riskLevel)}`}>
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-start space-x-4">
+                  <div className={`mt-1 w-12 h-12 rounded-full flex items-center justify-center ${analysisResult.riskLevel?.toLowerCase() === 'high' ? 'bg-red-500' :
+                    analysisResult.riskLevel?.toLowerCase() === 'moderate' ? 'bg-yellow-500' :
+                      'bg-green-500'
+                    }`}>
+                    <AlertTriangle className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-slate-800">
+                      Health Risk Assessment
+                    </h2>
+                    <div className="flex items-center space-x-3 mt-1">
+                      {getRiskBadge(analysisResult.riskLevel)}
+                      <span className="text-slate-600 flex items-center">
+                        <Clock className="w-4 h-4 mr-1" />
+                        {analysisResult.completedAt}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div className="bg-white rounded-lg p-4 border border-slate-200">
-                <div className="flex items-center space-x-2 mb-2">
-                  <Clock className="w-4 h-4 text-slate-500" />
-                  <span className="text-sm text-slate-600">Analysis completed: {analysisResult.completedAt}</span>
-                </div>
-                <p className="text-slate-700 font-medium">
-                  <strong>Primary Risk Level:</strong> {analysisResult.riskLevel || 'Unknown'}
+
+              <div className="bg-white rounded-lg p-4 mb-4 border border-slate-200">
+                <h3 className="text-lg font-semibold text-slate-800 mb-2">Summary</h3>
+                <div className="prose prose-sm max-w-none">
                   <ReactMarkdown>
                     {analysisResult.summary || 'No summary available.'}
                   </ReactMarkdown>
-                </p>
+                </div>
               </div>
+
+              <div className="bg-white rounded-lg p-4 mb-4 border border-slate-200">
+                <h3 className="text-lg font-semibold text-slate-800 mb-2">Detailed Analysis</h3>
+                <div className="prose prose-sm max-w-none">
+                  <ReactMarkdown>
+                    {analysisResult?.detailedAnalysis?.trim() ||
+                      streamedText?.trim() ||
+                      '### ⚠️ No detailed analysis available.'}
+                  </ReactMarkdown>
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="bg-white rounded-lg p-4 border border-slate-200">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <Activity className="w-5 h-5 text-red-500" />
+                    <h3 className="text-lg font-semibold text-slate-800">Key Concerns</h3>
+                  </div>
+                  <ul className="space-y-2">
+                    {analysisResult.concerns?.length ? (
+                      analysisResult.concerns.map((concern, i) => (
+                        <li key={i} className="flex items-start">
+                          <span className="text-red-500 mr-2 mt-1">•</span>
+                          <span>
+                            <ReactMarkdown>
+                              {concern}
+                            </ReactMarkdown>
+                          </span>
+                        </li>
+                      ))
+                    ) : (
+                      <li className="text-slate-500">No specific concerns identified</li>
+                    )}
+                  </ul>
+                </div>
+
+                <div className="bg-white rounded-lg p-4 border border-slate-200">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <Zap className="w-5 h-5 text-blue-500" />
+                    <h3 className="text-lg font-semibold text-slate-800">Recommended Actions</h3>
+                  </div>
+                  <ul className="space-y-2">
+                    {analysisResult.actions?.length ? (
+                      analysisResult.actions.map((action, i) => (
+                        <li key={i} className="flex items-start">
+                          <span className="text-blue-500 mr-2 mt-1">•</span>
+                          <span>
+                            <ReactMarkdown>
+                              {action}
+                            </ReactMarkdown>
+                          </span>
+                        </li>
+                      ))
+                    ) : (
+                      <li className="text-slate-500">No immediate actions required</li>
+                    )}
+                  </ul>
+                </div>
+              </div>
+
+              {analysisResult.guidelines?.length ? (
+                <div className="mt-4 bg-white rounded-lg p-4 border border-slate-200">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <Shield className="w-5 h-5 text-emerald-500" />
+                    <h3 className="text-lg font-semibold text-slate-800">Emergency Guidelines</h3>
+                  </div>
+                  <ol className="space-y-3">
+                    {analysisResult.guidelines.map((guideline, i) => (
+                      <li key={i} className="flex items-start">
+                        <span className="bg-emerald-100 text-emerald-800 rounded-full w-6 h-6 flex items-center justify-center mr-3 flex-shrink-0">
+                          {i + 1}
+                        </span>
+                        <span>
+                          <ReactMarkdown>
+                            {guideline}
+                            </ReactMarkdown>                       
+                          </span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              ) : null}
             </div>
 
-            <div className="medical-card">
-              <div className="flex items-center space-x-3 mb-4">
-                <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
-                  <Brain className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="text-xl font-bold text-slate-800">🧠 AI Analysis Report</h3>
-              </div>
-
-              <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-6 border border-blue-200">
-                {streamedText ? (
-                  <div className="whitespace-pre-wrap text-slate-800">
-                    <ReactMarkdown>
-                      {streamedText}
-                    </ReactMarkdown>
-                  </div>
-                ) : (
-                  <>
-                    <p className="text-slate-800 leading-relaxed mb-4">
-                      <strong>Analysis:</strong>
-                      <ReactMarkdown>
-                        {analysisResult.summary || 'No analysis available.'}
-                      </ReactMarkdown>
-                    </p>
-
-                    <div className="grid sm:grid-cols-2 gap-4 mt-4">
-                      <div className="bg-white rounded-lg p-4 border border-blue-200">
-                        <div className="flex items-center space-x-2 mb-2">
-                          <Activity className="w-5 h-5 text-red-500" />
-                          <span className="font-semibold text-slate-800">Primary Concerns</span>
-                        </div>
-                        <ul className="text-sm text-slate-700 space-y-1">
-                          {analysisResult.concerns?.length ? (
-                            analysisResult.concerns.map((concern, i) => (
-                              <li key={i}>• {concern}</li>
-                            ))
-                          ) : (
-                            <li>No specific concerns identified</li>
-                          )}
-                        </ul>
-                      </div>
-
-                      <div className="bg-white rounded-lg p-4 border border-blue-200">
-                        <div className="flex items-center space-x-2 mb-2">
-                          <Zap className="w-5 h-5 text-orange-500" />
-                          <span className="font-semibold text-slate-800">Immediate Actions</span>
-                        </div>
-                        <ul className="text-sm text-slate-700 space-y-1">
-                          {analysisResult.actions?.length ? (
-                            analysisResult.actions.map((action, i) => (
-                              <li key={i}>• {action}</li>
-                            ))
-                          ) : (
-                            <li>No immediate actions required</li>
-                          )}
-                        </ul>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {analysisResult.guidelines?.length && (
-              <div className="medical-card">
-                <div className="flex items-center space-x-3 mb-4">
-                  <div className="w-10 h-10 bg-gradient-to-r from-emerald-500 to-green-500 rounded-lg flex items-center justify-center">
-                    <Shield className="w-6 h-6 text-white" />
-                  </div>
-                  <h3 className="text-xl font-bold text-slate-800">✔️ Emergency Guidelines</h3>
-                </div>
-
-                <div className="space-y-3">
-                  {analysisResult.guidelines.map((guideline, index) => (
-                    <div key={index} className="flex items-start space-x-3 p-3 bg-emerald-50 rounded-lg border border-emerald-200">
-                      <div className="flex items-center justify-center w-6 h-6 bg-emerald-500 rounded-full text-white text-sm font-bold flex-shrink-0 mt-0.5">
-                        {index + 1}
-                      </div>
-                      <p className="text-slate-700">{guideline}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <div className="flex flex-wrap gap-3 justify-center">
               <button
-                onClick={() => {
-                  setShowResults(false);
-                  setStreamedText('');
-                  setAnalysisResult({});
-                }}
-                className="medical-button-primary"
+                onClick={handleRunAnalysis}
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center"
               >
-                Run New Analysis
+                <RefreshIcon className="w-5 h-5 mr-2" />
+                Re-run Analysis
               </button>
               <button
                 onClick={() => router('/dashboard')}
-                className="medical-button-secondary"
+                className="px-6 py-3 bg-slate-200 text-slate-800 rounded-lg hover:bg-slate-300 transition-colors flex items-center"
               >
+                <EditIcon className="w-5 h-5 mr-2" />
                 Update Profile
               </button>
               <button
                 onClick={() => {
-                  const reportData = {
-                    patient: profileData.name,
-                    date: analysisResult.completedAt,
-                    riskLevel: analysisResult.riskLevel,
-                    summary: analysisResult.summary,
-                    fullReport: streamedText
-                  };
-                  console.log('Saving report:', reportData);
-                  toast("Report Saved Successfully")
+                  toast.success("Report saved successfully");
                 }}
-                className="medical-button-secondary"
+                className="px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center"
               >
+                <SaveIcon className="w-5 h-5 mr-2" />
                 Save Report
               </button>
             </div>
@@ -432,5 +398,45 @@ Please analyze this data and generate a comprehensive clinical summary. The outp
     </Layout>
   );
 };
+
+const ProfileDetail = ({ label, value }: { label: string; value?: string }) => (
+  <div>
+    <h4 className="text-sm font-medium text-slate-600">{label}</h4>
+    <p className="text-slate-800 font-medium">{value || 'Not provided'}</p>
+  </div>
+);
+
+const RefreshIcon = ({ className }: { className?: string }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    className={className}
+  >
+    <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0020 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 004 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z" />
+  </svg>
+);
+
+const EditIcon = ({ className }: { className?: string }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    className={className}
+  >
+    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
+  </svg>
+);
+
+const SaveIcon = ({ className }: { className?: string }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    className={className}
+  >
+    <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z" />
+  </svg>
+);
 
 export default RiskAI;
