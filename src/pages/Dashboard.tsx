@@ -415,20 +415,12 @@ const Dashboard = () => {
                   <Save className="w-4 h-4" />
                   <span>Save Profile</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={generateReport}
-                  className="flex items-center space-x-2 px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-sm transition-colors"
-                >
-                  <Stethoscope className="w-4 h-4" />
-                  <span>Generate Report</span>
-                </button>
+               
               </div>
             )}
           </form>
         </div>
 
-        {/* Quick Stats */}
         {!isEditing && (
           <div className="grid sm:grid-cols-3 gap-6 mt-8">
             <div className="medical-card text-center bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
