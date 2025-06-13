@@ -18,7 +18,6 @@ Font.register({
     ]
 });
 
-// Create styles
 const styles = StyleSheet.create({
     page: {
         flexDirection: 'column',
@@ -140,7 +139,6 @@ interface ReportData {
 const ReportPDF = ({ reportData }: { reportData: ReportData }) => (
     <Document>
         <Page size="A4" style={styles.page}>
-            {/* Header */}
             <View style={styles.header}>
                 <View>
                     <Text style={styles.title}>Medical Emergency Report</Text>
@@ -179,7 +177,6 @@ const ReportPDF = ({ reportData }: { reportData: ReportData }) => (
                 </View>
             </View>
 
-            {/* Medical Information */}
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Medical Information</Text>
 
