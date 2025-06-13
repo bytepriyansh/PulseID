@@ -33,7 +33,6 @@ const Register = () => {
     
     setIsLoading(true);
     
-    // Mock registration simulation
     setTimeout(() => {
       setIsLoading(false);
       navigate('/dashboard');
