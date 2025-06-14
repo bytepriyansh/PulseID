@@ -195,8 +195,51 @@ const QRCodePage = () => {
           
 
           <div className="flex-1 space-y-6">
-      
-           
+            <div className="medical-card">
+              <h3 className="text-lg font-semibold text-slate-800 mb-4">Public Profile Link</h3>
+              <p className="text-sm text-slate-600 mb-4">
+                This is the direct link to your public medical profile. Anyone with this link can view your emergency medical information.
+              </p>
+
+              <div className="flex items-center space-x-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <input
+                  type="text"
+                  value={profileLink}
+                  readOnly
+                  className="flex-1 bg-transparent text-sm text-slate-700 focus:outline-none"
+                />
+                <button
+                  onClick={handleCopyLink}
+                  className="flex items-center space-x-1 px-3 py-2 bg-slate-200 hover:bg-slate-300 rounded text-sm text-slate-700 transition-colors"
+                >
+                  {isCopied ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      <span>Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      <span>Copy</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="medical-card bg-yellow-50 border-yellow-200">
+              <div className="flex items-start space-x-3">
+                <Shield className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-semibold text-yellow-800 mb-1">Privacy & Security</h4>
+                  <p className="text-sm text-yellow-700">
+                    Your QR code contains only essential medical information for emergencies.
+                    Personal details like full contact information and detailed medical history
+                    are kept private and secure.
+                  </p>
+                </div>
+              </div>
+            </div>
 
             <div className="medical-card">
               <h3 className="text-lg font-semibold text-slate-800 mb-4">What's Included</h3>
@@ -223,24 +266,11 @@ const QRCodePage = () => {
                   <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
                     <Shield className="w-4 h-4 text-red-600" />
                   </div>
-                  <span className="text-sm text-slate-700">Emergency Contact Information</span>
+                  <span className="text-sm text-slate-700">Emergency Contact & Doctor Information</span>
                 </div>
               </div>
             </div>
 
-            <div className="medical-card bg-yellow-50 border-yellow-200">
-              <div className="flex items-start space-x-3">
-                <Shield className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="font-semibold text-yellow-800 mb-1">Privacy & Security</h4>
-                  <p className="text-sm text-yellow-700">
-                    Your QR code contains only essential medical information for emergencies.
-                    Personal details like full contact information and detailed medical history
-                    are kept private and secure.
-                  </p>
-                </div>
-              </div>
-            </div>
             
           </div>
         </div>

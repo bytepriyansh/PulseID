@@ -10,7 +10,8 @@ import {
   Clock,
   Zap,
   Shield,
-  ExternalLink
+  ExternalLink,
+  Stethoscope
 } from 'lucide-react';
 import Layout from '../components/Layout';
 import ReactMarkdown from "react-markdown";
@@ -101,11 +102,29 @@ const RiskAI = () => {
 - Age: ${profileData.age}
 - Gender: ${profileData.gender}
 - Blood Group: ${profileData.bloodGroup}
+- Height: ${profileData.heightUnit === 'cm' 
+    ? `${profileData.height} cm` 
+    : `${profileData.heightFeet}'${profileData.heightInches}"`}
+- Weight: ${profileData.weight} ${profileData.weightUnit || 'kg'}
 - Medical Conditions: ${profileData.conditions || 'None'}
 - Current Medications: ${profileData.medications || 'None'}
 - Known Allergies: ${profileData.allergies || 'None'}
 - Current Symptoms: ${profileData.symptoms || 'None reported'}
-- Emergency Contact: ${profileData.emergencyContactName} (${profileData.emergencyContactNumber})
+- Emergency Contacts (Family & Friends): ${profileData.emergencyContacts?.map(contact => 
+    `${contact.name} (${contact.relationship}) - ${contact.number}`
+  ).join(', ') || 'None provided'}
+- Medical Professionals: ${profileData.doctorContacts?.map(doctor => 
+    `${doctor.name} (${doctor.specialization}) - ${doctor.number}`
+  ).join(', ') || 'None provided'}
+
+## Medical Reports History:
+${profileData.medicalReports.map(report => `
+- Type: ${report.type}
+  Date: ${report.date}
+  Summary: ${report.summary}
+  Details: ${report.details}
+  Concerns: ${report.concerns.join(', ') || 'None noted'}
+`).join('\n')}
 
 Please provide your analysis in this exact format:
 
@@ -229,10 +248,23 @@ Please ensure proper formatting with clear sections and avoid excessive spacing.
               <div className="flex justify-between">
                 <span className="text-slate-600 font-bold">Gender:</span>
                 <span>{profileData.gender || 'Not provided'}</span>
-              </div>
-              <div className="flex justify-between">
+              </div>              <div className="flex justify-between">
                 <span className="text-slate-600 font-bold">Blood Type:</span>
                 <span>{profileData.bloodGroup || 'Not provided'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600 font-bold">Height:</span>
+                <span>
+                  {profileData.heightUnit === 'cm' 
+                    ? `${profileData.height || 'Not provided'} cm`
+                    : `${profileData.heightFeet || '0'}' ${profileData.heightInches || '0'}`}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600 font-bold">Weight:</span>
+                <span>
+                  {profileData.weight ? `${profileData.weight} ${profileData.weightUnit || 'kg'}` : 'Not provided'}
+                </span>
               </div>
             </div>
 
@@ -254,20 +286,42 @@ Please ensure proper formatting with clear sections and avoid excessive spacing.
                 <p className="mt-1">{profileData.symptoms || 'None reported'}</p>
               </div>
             </div>
-          </div>
-
-          {/* Emergency Contact */}
-          {profileData.emergencyContactName && (
-            <div className="pt-6 border-t border-slate-300">
-              <div className="flex items-center space-x-3 mb-2">
-                <AlertTriangle className="w-5 h-5 text-red-600" />
-                <span className="text-lg font-bold text-red-700 uppercase tracking-wide">Emergency Contact</span>
+          </div>          {/* Emergency Contacts */}
+          <div className="pt-6 border-t border-slate-300 space-y-4">
+            {/* Family & Friends */}
+            {profileData.emergencyContacts && profileData.emergencyContacts.length > 0 && (
+              <div>
+                <div className="flex items-center space-x-3 mb-2">
+                  <AlertTriangle className="w-5 h-5 text-red-600" />
+                  <span className="text-lg font-bold text-red-700 uppercase tracking-wide">Family & Friends</span>
+                </div>
+                <div className="space-y-3">
+                  {profileData.emergencyContacts.map((contact, index) => (
+                    <p key={index} className="text-lg font-semibold text-slate-800">
+                      {contact.name} ({contact.relationship}) — {contact.number}
+                    </p>
+                  ))}
+                </div>
               </div>
-              <p className="text-lg font-semibold text-slate-800">
-                {profileData.emergencyContactName} — {profileData.emergencyContactNumber}
-              </p>
-            </div>
-          )}
+            )}
+            
+            {/* Medical Professionals */}
+            {profileData.doctorContacts && profileData.doctorContacts.length > 0 && (
+              <div className="mt-4">
+                <div className="flex items-center space-x-3 mb-2">
+                  <Stethoscope className="w-5 h-5 text-blue-600" />
+                  <span className="text-lg font-bold text-blue-700 uppercase tracking-wide">Medical Professionals</span>
+                </div>
+                <div className="space-y-3">
+                  {profileData.doctorContacts.map((doctor, index) => (
+                    <p key={index} className="text-lg font-semibold text-slate-800">
+                      {doctor.name} ({doctor.specialization}) — {doctor.number}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {!showResults && (

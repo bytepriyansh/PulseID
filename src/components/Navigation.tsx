@@ -8,8 +8,8 @@ const Navigation = () => {
   const location = useLocation();
 
   const navItems = [
-    { path: '/', label: 'Home' },
     { path: '/dashboard', label: 'Dashboard' },
+    { path: '/profile', label: 'My Profile' },
     { path: '/riskai', label: 'RiskAI' },
     { path: '/qrcode', label: 'QR Code' },
   ];
@@ -21,7 +21,7 @@ const Navigation = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
-          <Link to="/" className="flex items-center space-x-2">
+          <Link to="/dashboard" className="flex items-center space-x-2">
             <div className="w-9 h-9 bg-gradient-to-r from-sky-500 to-emerald-500 rounded-lg flex items-center justify-center">
               <Heart className="w-5 h-5 text-white" />
             </div>
@@ -35,8 +35,8 @@ const Navigation = () => {
                 key={item.path}
                 to={item.path}
                 className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${isActive(item.path)
-                    ? 'text-sky-600 bg-sky-50'
-                    : 'text-slate-600 hover:text-sky-600 hover:bg-sky-50'
+                  ? 'text-sky-600 bg-sky-50'
+                  : 'text-slate-600 hover:text-sky-600 hover:bg-sky-50'
                   }`}
               >
                 {item.label}
@@ -79,8 +79,8 @@ const Navigation = () => {
                   to={item.path}
                   onClick={() => setIsMenuOpen(false)}
                   className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${isActive(item.path)
-                      ? 'text-sky-600 bg-sky-50'
-                      : 'text-slate-600 hover:text-sky-600 hover:bg-sky-50'
+                    ? 'text-sky-600 bg-sky-50'
+                    : 'text-slate-600 hover:text-sky-600 hover:bg-sky-50'
                     }`}
                 >
                   {item.label}

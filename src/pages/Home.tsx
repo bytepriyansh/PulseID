@@ -1,13 +1,13 @@
-
 import React from 'react';
-import { Link } from 'react-router-dom';
-import { 
-  Heart, 
-  Shield, 
-  QrCode, 
-  Brain, 
-  Users, 
-  Clock, 
+import { Link, Navigate } from 'react-router-dom';
+import { SignInButton, useUser } from '@clerk/clerk-react';
+import {
+  Heart,
+  Shield,
+  QrCode,
+  Brain,
+  Users,
+  Clock,
   CheckCircle,
   ArrowRight,
   Github
@@ -15,6 +15,13 @@ import {
 import Layout from '../components/Layout';
 
 const Home = () => {
+  const { isSignedIn } = useUser();
+
+  // Redirect to dashboard if logged in
+  if (isSignedIn) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   const features = [
     {
       icon: Heart,
@@ -60,13 +67,12 @@ const Home = () => {
             <p className="text-xl sm:text-2xl text-slate-600 mb-8 max-w-3xl mx-auto">
               Store, Analyze, and Share Critical Medical Info Instantly — Backed by AI
             </p>
-            <Link
-              to="/dashboard"
-              className="inline-flex items-center space-x-2 medical-button-primary text-lg px-8 py-4 shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
-            >
-              <span>Get Started</span>
-              <ArrowRight className="w-5 h-5" />
-            </Link>
+            <SignInButton mode="modal">
+              <button className="inline-flex items-center space-x-2 medical-button-primary text-lg px-8 py-4 shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200">
+                <span>Get Started</span>
+                <ArrowRight className="w-5 h-5" />
+              </button>
+            </SignInButton>
           </div>
         </div>
       </section>
@@ -78,7 +84,7 @@ const Home = () => {
               Why Choose PulseID?
             </h2>
             <p className="text-lg text-slate-600 max-w-2xl mx-auto">
-              In emergencies, every second counts. PulseID ensures your critical medical information 
+              In emergencies, every second counts. PulseID ensures your critical medical information
               is instantly accessible to healthcare providers when you need it most.
             </p>
           </div>
@@ -173,12 +179,12 @@ const Home = () => {
           <p className="text-slate-300 mb-6 max-w-md mx-auto">
             Empowering individuals with AI-driven healthcare insights and emergency medical preparedness.
           </p>
-          
+
           <div className="flex items-center justify-center space-x-6 text-sm text-slate-400">
             <span>Built with ❤️ for healthcare</span>
-          
+
           </div>
-          
+
           <div className="mt-8 pt-8 border-t border-slate-700 text-sm text-slate-400">
             <p>&copy; 2025 PulseID. All rights reserved. | Privacy Policy | Terms of Service</p>
           </div>
