@@ -234,18 +234,33 @@ const Profile = () => {
         let updatedFormData = { ...formData };
 
         if (name === 'heightFeet' || name === 'heightInches') {
+            const feet = name === 'heightFeet' ? value : formData.heightFeet;
+            const inches = name === 'heightInches' ? value : formData.heightInches;
             updatedFormData = {
                 ...updatedFormData,
                 [name]: value,
+                heightUnit: 'ft',
                 height: undefined // Clear the cm value when using feet/inches
             };
+            console.log('Updated height (ft):', { feet, inches });
         } else if (name === 'height') {
+            // Store the value and unit for cm
             updatedFormData = {
                 ...updatedFormData,
                 height: value,
+                heightUnit: 'cm',
                 heightFeet: undefined, // Clear feet/inches when using cm
                 heightInches: undefined
             };
+            console.log('Updated height (cm):', value);
+        } else if (name === 'weight') {
+            // Ensure weight is stored with its unit
+            updatedFormData = {
+                ...updatedFormData,
+                weight: value,
+                weightUnit: weightUnit || 'kg' // Default to kg if not set
+            };
+            console.log('Updated weight:', { value, unit: weightUnit || 'kg' });
         } else {
             updatedFormData = {
                 ...updatedFormData,
@@ -390,47 +405,112 @@ const Profile = () => {
             }
         });
 
-        // Validate height
-        if (formData.heightUnit === 'ft') {
-            if (formData.heightFeet && (parseInt(formData.heightFeet) < 1 || parseInt(formData.heightFeet) > 8)) {
-                newErrors.heightFeet = 'Height (feet) must be between 1 and 8';
+        // Validate age
+        if (formData.age) {
+            const age = parseInt(formData.age);
+            if (!Number.isInteger(age) || age <= 0) {
+                newErrors.age = 'Age must be a positive number';
+            } else if (age > 120) {
+                newErrors.age = 'Age must be less than 120';
+            } else if (age < 1) {
+                newErrors.age = 'Age must be at least 1';
+            }
+        } else {
+            newErrors.age = 'Age is required';
+        }
+
+        // Validate height based on unit
+        if (!formData.heightUnit) {
+            newErrors.height = 'Height unit is required';
+        } else if (formData.heightUnit === 'cm') {
+            const heightCm = parseFloat(formData.height);
+            if (!formData.height || isNaN(heightCm)) {
+                newErrors.height = 'Height is required';
+            } else if (heightCm < 30 || heightCm > 250) {
+                newErrors.height = 'Height must be between 30 and 250 cm';
+            }
+            console.log('Height validation (cm):', { heightCm, valid: !newErrors.height });
+        } else if (formData.heightUnit === 'ft') {
+            if (!formData.heightFeet || parseInt(formData.heightFeet) < 1) {
+                newErrors.heightFeet = 'Feet value is required and must be at least 1';
+            } else if (parseInt(formData.heightFeet) > 8) {
+                newErrors.heightFeet = 'Height (feet) must be 8 or less';
             }
             if (formData.heightInches && (parseInt(formData.heightInches) < 0 || parseInt(formData.heightInches) >= 12)) {
-                newErrors.heightInches = 'Height (inches) must be between 0 and 11';
+                newErrors.heightInches = 'Inches must be between 0 and 11';
             }
-        } else if (formData.height && (parseInt(formData.height) < 30 || parseInt(formData.height) > 250)) {
-            newErrors.height = 'Height must be between 30 and 250 cm';
+            console.log('Height validation (ft):', { 
+                feet: formData.heightFeet, 
+                inches: formData.heightInches,
+                valid: !newErrors.heightFeet && !newErrors.heightInches 
+            });
         }
 
         // Validate weight
-        if (formData.weight) {
+        if (!formData.weight) {
+            newErrors.weight = 'Weight is required';
+        } else {
             const weight = parseFloat(formData.weight);
-            if (formData.weightUnit === 'kg' && (weight < 20 || weight > 500)) {
-                newErrors.weight = 'Weight must be between 20 and 500 kg';
-            } else if (formData.weightUnit === 'lbs' && (weight < 44 || weight > 1100)) {
-                newErrors.weight = 'Weight must be between 44 and 1100 lbs';
+            if (isNaN(weight) || weight <= 0) {
+                newErrors.weight = 'Weight must be a positive number';
+            } else if (formData.weightUnit === 'kg' && weight > 500) {
+                newErrors.weight = 'Weight must be less than 500 kg';
+            } else if (formData.weightUnit === 'lbs' && weight > 1100) {
+                newErrors.weight = 'Weight must be less than 1100 lbs';
             }
+            console.log('Weight validation:', {
+                weight,
+                unit: formData.weightUnit,
+                valid: !newErrors.weight
+            });
         }
 
         // Validate family & friends emergency contacts
         if (!formData.emergencyContacts || formData.emergencyContacts.length === 0) {
-            newErrors['emergencyContacts'] = 'At least one family member or friend contact is required';
+            newErrors.emergencyContacts = 'At least one emergency contact is required';
         } else {
             formData.emergencyContacts.forEach((contact, index) => {
-                if (!contact.name || !contact.number || !contact.relationship) {
-                    newErrors[`emergencyContact${index}`] = 'All emergency contact fields are required';
+                const contactPrefix = `emergencyContact${index}`;
+                if (!contact.name) {
+                    newErrors[`${contactPrefix}Name`] = 'Contact name is required';
                 }
-                if (contact.number && !/^\d{10,15}$/.test(contact.number)) {
-                    newErrors[`emergencyContactNumber${index}`] = 'Enter a valid phone number';
+                if (!contact.relationship) {
+                    newErrors[`${contactPrefix}Relationship`] = 'Relationship is required';
+                }
+                if (!contact.number) {
+                    newErrors[`${contactPrefix}Number`] = 'Phone number is required';
+                } else {
+                    // Remove any non-digit characters for validation
+                    const cleanNumber = contact.number.replace(/\D/g, '');
+                    if (cleanNumber.length !== 10) {
+                        newErrors[`${contactPrefix}Number`] = 'Phone number must be exactly 10 digits';
+                    } else if (!/^[1-9]\d{9}$/.test(cleanNumber)) {
+                        newErrors[`${contactPrefix}Number`] = 'Enter a valid 10-digit phone number';
+                    }
                 }
             });
         }
 
-        // Validate doctor contacts if they exist (optional)
+        // Validate doctor contacts
         if (formData.doctorContacts && formData.doctorContacts.length > 0) {
             formData.doctorContacts.forEach((doctor, index) => {
-                if (doctor.number && !/^\d{10,15}$/.test(doctor.number)) {
-                    newErrors[`doctorContactNumber${index}`] = 'Enter a valid phone number';
+                const doctorPrefix = `doctorContact${index}`;
+                if (!doctor.name) {
+                    newErrors[`${doctorPrefix}Name`] = 'Doctor name is required';
+                }
+                if (!doctor.specialization) {
+                    newErrors[`${doctorPrefix}Specialization`] = 'Specialization is required';
+                }
+                if (!doctor.number) {
+                    newErrors[`${doctorPrefix}Number`] = 'Phone number is required';
+                } else {
+                    // Remove any non-digit characters for validation
+                    const cleanNumber = doctor.number.replace(/\D/g, '');
+                    if (cleanNumber.length !== 10) {
+                        newErrors[`${doctorPrefix}Number`] = 'Phone number must be exactly 10 digits';
+                    } else if (!/^[1-9]\d{9}$/.test(cleanNumber)) {
+                        newErrors[`${doctorPrefix}Number`] = 'Enter a valid 10-digit phone number';
+                    }
                 }
             });
         }
@@ -471,6 +551,61 @@ const Profile = () => {
         { name: 'emergencyDoctorName', label: 'Emergency Doctor Name', icon: Stethoscope, type: 'text', required: true },
         { name: 'emergencyDoctorNumber', label: 'Emergency Doctor Number', icon: Phone, type: 'tel', required: true }
     ];
+
+    const calculateBMI = () => {
+        try {
+            // Convert height to meters regardless of unit
+            let heightInMeters = 0;
+            
+            // If using centimeters
+            if (formData.heightUnit === 'cm' && formData.height) {
+                const heightCm = parseFloat(formData.height);
+                if (isNaN(heightCm) || heightCm <= 0) return null;
+                heightInMeters = heightCm / 100;
+            } 
+            // If using feet and inches
+            else if (formData.heightUnit === 'ft' && formData.heightFeet) {
+                const feet = parseInt(formData.heightFeet || '0');
+                const inches = parseInt(formData.heightInches || '0');
+                if (feet <= 0) return null;
+                const totalInches = (feet * 12) + inches;
+                heightInMeters = totalInches * 0.0254; // Convert inches to meters
+            } else {
+                return null;
+            }
+
+            // Handle cases where height is unreasonable
+            if (heightInMeters < 0.3 || heightInMeters > 2.5) return null;
+
+            // Convert weight to kg regardless of unit
+            if (!formData.weight) return null;
+            const weight = parseFloat(formData.weight);
+            if (isNaN(weight) || weight <= 0) return null;
+            
+            const weightInKg = formData.weightUnit === 'kg' ? weight : weight / 2.20462;
+
+            // Handle cases where weight is unreasonable
+            if (weightInKg < 20 || weightInKg > 500) return null;
+
+            // Calculate BMI
+            const bmi = weightInKg / (heightInMeters * heightInMeters);
+            
+            // Extra validation to ensure reasonable BMI
+            if (isNaN(bmi) || !isFinite(bmi) || bmi < 10 || bmi > 50) return null;
+            
+            return bmi.toFixed(1);
+        } catch (error) {
+            console.error('BMI calculation error:', error);
+            return null;
+        }
+    };
+
+    const getBMICategory = (bmi: number) => {
+        if (bmi < 18.5) return { category: 'Underweight', color: 'text-blue-600' };
+        if (bmi < 25) return { category: 'Normal', color: 'text-green-600' };
+        if (bmi < 30) return { category: 'Overweight', color: 'text-yellow-600' };
+        return { category: 'Obese', color: 'text-red-600' };
+    };
 
     const getConditionCount = () => {
         if (!formData.conditions || formData.conditions === 'None') return 0;
@@ -545,7 +680,9 @@ const Profile = () => {
                                                 <span>{field.label}</span>
                                             </label>
                                             <div className="text-slate-800 bg-slate-50 px-3 py-2 rounded-lg">
-                                                {formData[field.name as keyof typeof formData] || 'Not set'}
+                                                {typeof formData[field.name as keyof typeof formData] === 'string' 
+                                                    ? formData[field.name as keyof typeof formData] as string 
+                                                    : 'Not set'}
                                             </div>
                                         </div>
                                     ))}
@@ -590,6 +727,9 @@ const Profile = () => {
                                         {isProfileComplete() ? 'COMPLETE' : 'INCOMPLETE'}
                                     </div>
                                 </div>
+
+                                {/* Status Cards */}
+                                                {/* Health Information Cards will be moved out of this section */}
 
                                 <div className="space-y-4">
                                     <div className="p-3 bg-slate-50 rounded-lg">
@@ -1236,23 +1376,41 @@ const Profile = () => {
                                                                     placeholder="Relationship"
                                                                     className="medical-input w-full"
                                                                 />
-                                                                <input
-                                                                    type="tel"
-                                                                    value={contact.number || ''}
-                                                                    onChange={(e) => {
-                                                                        const updatedContacts = [...formData.emergencyContacts];
-                                                                        updatedContacts[index] = {
-                                                                            ...contact,
-                                                                            number: e.target.value
-                                                                        };
-                                                                        setFormData(prev => ({
-                                                                            ...prev,
-                                                                            emergencyContacts: updatedContacts
-                                                                        }));
-                                                                    }}
-                                                                    placeholder="Phone Number"
-                                                                    className="medical-input w-full"
-                                                                />
+                                                                <div className="space-y-1">
+                                                                    <input
+                                                                        type="tel"
+                                                                        value={contact.number || ''}
+                                                                        onChange={(e) => {
+                                                                            const updatedContacts = [...formData.emergencyContacts];
+                                                                            updatedContacts[index] = {
+                                                                                ...contact,
+                                                                                number: e.target.value
+                                                                            };
+                                                                            setFormData(prev => ({
+                                                                                ...prev,
+                                                                                emergencyContacts: updatedContacts
+                                                                            }));
+                                                                            // Clear error when user starts typing
+                                                                            if (errors[`emergencyContactNumber${index}`]) {
+                                                                                setErrors(prev => {
+                                                                                    const newErrors = { ...prev };
+                                                                                    delete newErrors[`emergencyContactNumber${index}`];
+                                                                                    return newErrors;
+                                                                                });
+                                                                            }
+                                                                        }}
+                                                                        placeholder="Phone Number"
+                                                                        className={`medical-input w-full ${
+                                                                            errors[`emergencyContactNumber${index}`] ? 'border-red-300 bg-red-50' : ''
+                                                                        }`}
+                                                                    />
+                                                                    {errors[`emergencyContactNumber${index}`] && (
+                                                                        <p className="text-red-500 text-xs flex items-center mt-1">
+                                                                            <AlertCircle className="w-3 h-3 mr-1" />
+                                                                            {errors[`emergencyContactNumber${index}`]}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         ) : (
                                                             <div className="space-y-2">
@@ -1336,23 +1494,41 @@ const Profile = () => {
                                                                     placeholder="Specialization"
                                                                     className="medical-input w-full"
                                                                 />
-                                                                <input
-                                                                    type="tel"
-                                                                    value={doctor.number || ''}
-                                                                    onChange={(e) => {
-                                                                        const updatedDoctors = [...formData.doctorContacts];
-                                                                        updatedDoctors[index] = {
-                                                                            ...doctor,
-                                                                            number: e.target.value
-                                                                        };
-                                                                        setFormData(prev => ({
-                                                                            ...prev,
-                                                                            doctorContacts: updatedDoctors
-                                                                        }));
-                                                                    }}
-                                                                    placeholder="Phone Number"
-                                                                    className="medical-input w-full"
-                                                                />
+                                                                <div className="space-y-1">
+                                                                    <input
+                                                                        type="tel"
+                                                                        value={doctor.number || ''}
+                                                                        onChange={(e) => {
+                                                                            const updatedDoctors = [...formData.doctorContacts];
+                                                                            updatedDoctors[index] = {
+                                                                                ...doctor,
+                                                                                number: e.target.value
+                                                                            };
+                                                                            setFormData(prev => ({
+                                                                                ...prev,
+                                                                                doctorContacts: updatedDoctors
+                                                                            }));
+                                                                            // Clear error when user starts typing
+                                                                            if (errors[`doctorContactNumber${index}`]) {
+                                                                                setErrors(prev => {
+                                                                                    const newErrors = { ...prev };
+                                                                                    delete newErrors[`doctorContactNumber${index}`];
+                                                                                    return newErrors;
+                                                                                });
+                                                                            }
+                                                                        }}
+                                                                        placeholder="Phone Number"
+                                                                        className={`medical-input w-full ${
+                                                                            errors[`doctorContactNumber${index}`] ? 'border-red-300 bg-red-50' : ''
+                                                                        }`}
+                                                                    />
+                                                                    {errors[`doctorContactNumber${index}`] && (
+                                                                        <p className="text-red-500 text-xs flex items-center mt-1">
+                                                                            <AlertCircle className="w-3 h-3 mr-1" />
+                                                                            {errors[`doctorContactNumber${index}`]}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         ) : (
                                                             <div className="space-y-2">
@@ -1430,15 +1606,38 @@ const Profile = () => {
 
                         <div className="medical-card text-center bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
                             <div className="w-12 h-12 bg-amber-500 rounded-full flex items-center justify-center mx-auto mb-3">
-                                <User className="w-6 h-6 text-white" />
+                                <Heart className="w-6 h-6 text-white" />
                             </div>
-                            <h3 className="font-semibold text-gray-800">Weight</h3>
-                            <p className="text-2xl font-bold text-amber-600">
-                                {formData.weight ? `${formData.weight} ${formData.weightUnit || 'kg'}` : 'Not set'}
-                            </p>
-                            <p className="text-sm text-gray-600 mt-1">
-                                {formData.weight ? 'Updated weight' : 'Please update your profile'}
-                            </p>
+                            <h3 className="font-semibold text-gray-800">BMI Index</h3>
+                            {(() => {
+                                const bmi = calculateBMI();
+                                if (!bmi && (!formData.height || !formData.weight)) {
+                                    return (
+                                        <>
+                                            <p className="text-2xl font-bold text-amber-600">Not available</p>
+                                            <p className="text-sm text-gray-600 mt-1">Add height & weight</p>
+                                        </>
+                                    );
+                                }
+                                if (!bmi) {
+                                    return (
+                                        <>
+                                            <p className="text-2xl font-bold text-amber-600">Invalid input</p>
+                                            <p className="text-sm text-gray-600 mt-1">Check height & weight values</p>
+                                        </>
+                                    );
+                                }
+                                const { category, color } = getBMICategory(parseFloat(bmi));
+                                return (
+                                    <>
+                                        <p className="text-2xl font-bold text-amber-600">{bmi}</p>
+                                        <p className={`text-sm font-medium ${color} mt-1`}>{category}</p>
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            {formData.heightUnit === 'cm' ? `${formData.height} cm` : `${formData.heightFeet}'${formData.heightInches}"`} • {formData.weight} {formData.weightUnit}
+                                        </p>
+                                    </>
+                                );
+                            })()}
                         </div>
 
                         <div className="medical-card text-center bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
@@ -1459,10 +1658,16 @@ const Profile = () => {
                     <div className="mt-6 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4 flex items-start">
                         <AlertTriangle className="w-5 h-5 text-amber-500 mt-0.5 mr-2 flex-shrink-0" />
                         <div>
-                            <p className="font-medium text-amber-800 mb-1">Complete your profile</p>
-                            <p className="text-amber-700 text-sm">
-                                Please fill all required fields (marked with *) to get accurate health insights and emergency preparedness.
+                            <p className="font-medium text-amber-800">
+                                Your profile is incomplete. Please update the following fields:
                             </p>
+                            <ul className="list-disc list-inside text-amber-700 mt-1">
+                                {['conditions', 'medications', 'allergies', 'symptoms'].map(field => (
+                                    !formData[field] || formData[field] === 'None' ? (
+                                        <li key={field}>- {field.charAt(0).toUpperCase() + field.slice(1)}</li>
+                                    ) : null
+                                ))}
+                            </ul>
                         </div>
                     </div>
                 )}

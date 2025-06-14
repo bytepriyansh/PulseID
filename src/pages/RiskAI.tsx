@@ -88,24 +88,29 @@ const RiskAI = () => {
     setShowResults(true); // Show results immediately to display streaming
 
     try {
+      const bmi = calculateBMI();
+      const bmiCategory = bmi ? getBMICategory(parseFloat(bmi)).category : null;
+      
       const prompt = `You are a medical AI assistant providing balanced, reassuring clinical guidance. Analyze the patient profile and provide a clear, non-alarming summary that focuses on actionable insights rather than speculative concerns.
 
 ## Analysis Guidelines:
 - "None" or "None reported" means the patient does NOT have that condition/allergy/medication - treat as healthy baseline
 - Focus on actual presenting symptoms and known conditions only
+- Consider BMI classification in your analysis and recommendations
 - Avoid speculation or linking unrelated factors unless clinically significant
 - Provide reassuring, practical guidance appropriate for patient self-care
 - Only escalate to higher risk levels when clear clinical indicators warrant it
 
 ## Patient Profile:
+${bmi ? `BMI: ${bmi} (${bmiCategory})` : ''}
+Height: ${profileData.heightUnit === 'cm' 
+    ? `${profileData.height} cm` 
+    : `${profileData.heightFeet || 0}'${profileData.heightInches || 0}"`}
+Weight: ${profileData.weight} ${profileData.weightUnit}
 - Name: ${profileData.name}
 - Age: ${profileData.age}
 - Gender: ${profileData.gender}
 - Blood Group: ${profileData.bloodGroup}
-- Height: ${profileData.heightUnit === 'cm' 
-    ? `${profileData.height} cm` 
-    : `${profileData.heightFeet}'${profileData.heightInches}"`}
-- Weight: ${profileData.weight} ${profileData.weightUnit || 'kg'}
 - Medical Conditions: ${profileData.conditions || 'None'}
 - Current Medications: ${profileData.medications || 'None'}
 - Known Allergies: ${profileData.allergies || 'None'}
@@ -168,6 +173,77 @@ Please ensure proper formatting with clear sections and avoid excessive spacing.
     } finally {
       setIsAnalyzing(false);
     }
+  };
+
+  const calculateBMI = () => {
+    try {
+        // Convert height to meters regardless of unit
+        let heightInMeters = 0;
+        
+        // If using centimeters
+        if (profileData.heightUnit === 'cm') {
+            const heightCm = parseFloat(profileData.height);
+            if (!isNaN(heightCm) && heightCm > 0) {
+                heightInMeters = heightCm / 100;
+            } else {
+                console.log('Invalid CM height:', heightCm);
+                return null;
+            }
+        } 
+        // If using feet and inches
+        else if (profileData.heightUnit === 'ft') {
+            const feet = parseInt(profileData.heightFeet || '0');
+            const inches = parseInt(profileData.heightInches || '0');
+            if (feet > 0) {
+                const totalInches = (feet * 12) + inches;
+                heightInMeters = totalInches * 0.0254;
+            } else {
+                console.log('Invalid feet/inches:', { feet, inches });
+                return null;
+            }
+        }
+
+        if (heightInMeters <= 0) {
+            console.log('Height conversion resulted in invalid value:', heightInMeters);
+            return null;
+        }
+
+        // Convert weight to kg
+        const weight = parseFloat(profileData.weight);
+        if (isNaN(weight) || weight <= 0) {
+            console.log('Invalid weight:', weight);
+            return null;
+        }
+
+        const weightInKg = profileData.weightUnit === 'kg' ? weight : weight / 2.20462;
+
+        // Calculate BMI
+        const bmi = weightInKg / (heightInMeters * heightInMeters);
+
+        console.log('BMI calculation:', {
+            heightInMeters,
+            weightInKg,
+            bmi
+        });
+
+        // Only validate that BMI is a valid number
+        if (isNaN(bmi) || !isFinite(bmi)) {
+            console.log('Invalid BMI calculation result:', bmi);
+            return null;
+        }
+
+        return bmi.toFixed(1);
+    } catch (error) {
+        console.error('BMI calculation error:', error);
+        return null;
+    }
+  };
+
+  const getBMICategory = (bmi: number) => {
+    if (bmi < 18.5) return { category: 'Underweight', color: 'text-blue-600' };
+    if (bmi < 25) return { category: 'Normal', color: 'text-green-600' };
+    if (bmi < 30) return { category: 'Overweight', color: 'text-yellow-600' };
+    return { category: 'Obese', color: 'text-red-600' };
   };
 
   const getRiskBadge = (riskLevel?: string) => {
@@ -253,17 +329,18 @@ Please ensure proper formatting with clear sections and avoid excessive spacing.
                 <span>{profileData.bloodGroup || 'Not provided'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-600 font-bold">Height:</span>
+                <span className="text-slate-600 font-bold">BMI:</span>
                 <span>
-                  {profileData.heightUnit === 'cm' 
-                    ? `${profileData.height || 'Not provided'} cm`
-                    : `${profileData.heightFeet || '0'}' ${profileData.heightInches || '0'}`}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-600 font-bold">Weight:</span>
-                <span>
-                  {profileData.weight ? `${profileData.weight} ${profileData.weightUnit || 'kg'}` : 'Not provided'}
+                  {(() => {
+                    const bmi = calculateBMI();
+                    if (!bmi) return 'Not available';
+                    const { category, color } = getBMICategory(parseFloat(bmi));
+                    return (
+                      <>
+                        {bmi} <span className={color}>({category})</span>
+                      </>
+                    );
+                  })()}
                 </span>
               </div>
             </div>
@@ -346,7 +423,7 @@ Please ensure proper formatting with clear sections and avoid excessive spacing.
             {isAnalyzing && (
               <div className="mt-4">
                 <div className="w-64 mx-auto bg-gray-200 rounded-full h-2">
-                  <div className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full animate-pulse" style={{ width: '60%' }}></div>
+                  <div className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full animate-pulse w-3/5"></div>
                 </div>
                 <p className="text-sm text-slate-600 mt-2">Processing medical data for {profileData.name}...</p>
               </div>
