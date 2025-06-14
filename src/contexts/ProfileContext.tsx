@@ -26,6 +26,7 @@ export interface DoctorContact {
 }
 
 export interface ProfileData {
+    id?: string; // Unique identifier for the profile
     name: string;
     age: string;
     gender: string;
