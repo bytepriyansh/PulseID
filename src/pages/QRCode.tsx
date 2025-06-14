@@ -14,21 +14,14 @@ const QRCodePage = () => {
 
   const generateProfileLink = () => {
     const baseUrl = window.location.origin;
-    const userId = profileData?.id || '';
-    // Point directly to the PDF report endpoint
-    return `${baseUrl}/report-pdf/${userId}`;
-  };
-
-  // Generate emergency QR code link
-  const generateEmergencyLink = () => {
-    const baseUrl = window.location.origin;
-    const userId = profileData?.id || '';
-    // Point to the emergency version of the PDF report
-    return `${baseUrl}/report-pdf/${userId}/emergency`;
+    const encodedData = encodeURIComponent(JSON.stringify({
+      ...profileData,
+      timestamp: new Date().toISOString()
+    }));
+    return `${baseUrl}/report?data=${encodedData}`;
   };
 
   const profileLink = generateProfileLink();
-  const emergencyLink = generateEmergencyLink();
 
   const handleCopyLink = async () => {
     try {
@@ -119,31 +112,6 @@ const QRCodePage = () => {
     }
   };
 
-  const handleDownloadEmergencyQR = async () => {
-    try {
-      const container = document.getElementById("emergency-qr-code-svg");
-      const svg = container?.querySelector('svg');
-
-      if (!svg) {
-        console.error("Emergency QR code SVG not found");
-        return;
-      }
-
-      const svgClone = svg.cloneNode(true) as SVGElement;
-      svgClone.setAttribute('width', '1000');
-      svgClone.setAttribute('height', '1000');
-
-      const svgString = new XMLSerializer().serializeToString(svgClone);
-      const blob = new Blob([svgString], { type: 'image/svg+xml' });
-      
-      saveAs(blob, 'emergency-medical-qr-code.svg');
-      toast.success("Emergency QR code downloaded!");
-    } catch (err) {
-      console.error('Failed to download emergency QR code:', err);
-      toast.error("Failed to download emergency QR code");
-    }
-  };
-
   const handleShare = async () => {
     if (navigator.share) {
       try {
@@ -224,6 +192,8 @@ const QRCodePage = () => {
             </div>
           </div>
 
+          
+
           <div className="flex-1 space-y-6">
             <div className="medical-card">
               <h3 className="text-lg font-semibold text-slate-800 mb-4">Public Profile Link</h3>
@@ -302,84 +272,6 @@ const QRCodePage = () => {
             </div>
 
             
-          </div>
-        </div>
-
-        <div className="mt-12">
-          <div className="text-center mb-8">
-            <h2 className="text-2xl font-bold text-slate-800">Your QR Codes</h2>
-            <p className="text-md text-slate-600">
-              Scan these QR codes to access your medical information
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-8">
-            {/* Regular Profile QR Code */}
-            <div className="bg-white p-6 rounded-lg shadow-lg">
-              <div className="flex items-center gap-2 mb-4">
-                <QrCode className="w-6 h-6 text-blue-600" />
-                <h2 className="text-xl font-semibold">Profile QR Code</h2>
-              </div>
-              <div className="flex justify-center p-4 bg-white rounded-lg" id="qr-code-svg">
-                <QRCode value={profileLink} size={200} />
-              </div>
-              <div className="mt-4 space-y-3">
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Eye className="w-4 h-4" />
-                  <span>Scan to view full medical profile</span>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleDownloadQR}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                  >
-                    <Download className="w-4 h-4" />
-                    Download QR
-                  </button>
-                  <button
-                    onClick={handleCopyLink}
-                    className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
-                  >
-                    {isCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                    {isCopied ? 'Copied!' : 'Copy Link'}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Emergency QR Code */}
-            <div className="bg-white p-6 rounded-lg shadow-lg border-2 border-red-100">
-              <div className="flex items-center gap-2 mb-4">
-                <AlertTriangle className="w-6 h-6 text-red-600" />
-                <h2 className="text-xl font-semibold">Emergency QR Code</h2>
-              </div>
-              <div className="flex justify-center p-4 bg-white rounded-lg" id="emergency-qr-code-svg">
-                <QRCode value={emergencyLink} size={200} />
-              </div>
-              <div className="mt-4 space-y-3">
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Shield className="w-4 h-4" />
-                  <span>Scan for emergency medical information</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <User className="w-4 h-4" />
-                  <span>Shows critical info for first responders</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Pill className="w-4 h-4" />
-                  <span>Includes allergies and current medications</span>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleDownloadEmergencyQR()}
-                    className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                  >
-                    <Download className="w-4 h-4" />
-                    Download Emergency QR
-                  </button>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </div>

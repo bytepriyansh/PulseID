@@ -10,6 +10,7 @@ import Profile from "./pages/Profile";
 import RiskAI from "./pages/RiskAI";
 import QRCodePage from "./pages/QRCode";
 import Report from "./pages/Report";
+import ReportPDF from "./pages/ReportPDF";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +29,7 @@ const App = () => (
           <Route path="/riskai" element={<RiskAI />} />
           <Route path="/qrcode" element={<QRCodePage />} />
           <Route path="/report" element={<Report />} />
+          <Route path="/report-pdf" element={<ReportPDF />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
