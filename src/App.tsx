@@ -29,7 +29,6 @@ const App = () => (
           <Route path="/riskai" element={<RiskAI />} />
           <Route path="/qrcode" element={<QRCodePage />} />
           <Route path="/report" element={<Report />} />
-          <Route path="/report-pdf" element={<ReportPDF />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
