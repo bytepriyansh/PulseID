@@ -3,7 +3,11 @@ import { Link, useLocation } from 'react-router-dom';
 import { Menu, X, Heart } from 'lucide-react';
 import { SignedIn, SignedOut, SignInButton, UserButton } from '@clerk/clerk-react';
 
-const Navigation = () => {
+interface NavigationProps {
+  className?: string;
+}
+
+const Navigation = ({ className = '' }: NavigationProps) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const location = useLocation();
 
@@ -17,7 +21,7 @@ const Navigation = () => {
   const isActive = (path: string) => location.pathname === path;
 
   return (
-    <nav className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-50">
+    <nav className={`bg-white border-b border-slate-200 shadow-sm sticky top-0 z-50 ${className}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}

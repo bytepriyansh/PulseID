@@ -1,4 +1,4 @@
-import  { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { QrCode, Download, Share2, Eye, Shield, Copy, Check, AlertTriangle, User, Pill } from 'lucide-react';
 import Layout from '../components/Layout';
 import QRCode from 'react-qr-code';
@@ -7,21 +7,107 @@ import { useNavigate } from 'react-router-dom';
 import { useProfile } from '@/contexts/ProfileContext';
 import { toast } from 'sonner';
 
+interface CompressedData {
+  n: string; // name
+  a: string; // age
+  g: string; // gender
+  b: string; // blood group
+  c: string; // conditions
+  m: string; // medications
+  al: string; // allergies
+  s: string; // symptoms
+  ec: { n: string; p: string; r: string; }[]; // emergency contacts
+  dc: { n: string; p: string; s: string; }[]; // doctor contacts
+  t: string; // timestamp
+}
+
 const QRCodePage = () => {
-  const { profileData } = useProfile();
+  const { profileData, isLoading } = useProfile();
   const [isCopied, setIsCopied] = useState(false);
+  const [qrError, setQrError] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  const generateProfileLink = () => {
+  // Generate profile link with validation and error handling
+  const generateProfileLink = useMemo(() => {
     const baseUrl = window.location.origin;
-    const encodedData = encodeURIComponent(JSON.stringify({
-      ...profileData,
-      timestamp: new Date().toISOString()
-    }));
-    return `${baseUrl}/report?data=${encodedData}`;
-  };
 
-  const profileLink = generateProfileLink();
+    // Validate profile data first
+    if (!profileData || !profileData.name || !profileData.age) {
+      return { link: baseUrl, error: 'Name and age are required' };
+    }
+
+    try {
+      // Create a compressed data object with all essential information
+      const reportData = {
+        // Basic Info
+        n: profileData.name?.slice(0, 50) || '',
+        a: profileData.age?.toString().slice(0, 10) || '',
+        g: profileData.gender?.slice(0, 10) || '',
+        b: profileData.bloodGroup?.slice(0, 5) || '',
+        h: profileData.height || undefined,
+        hu: profileData.heightUnit,
+        w: profileData.weight || undefined,
+        wu: profileData.weightUnit,
+        
+        // Medical Info - ensuring all fields are included
+        c: profileData.conditions || '',
+        m: profileData.medications || '',
+        al: profileData.allergies || '',
+        s: profileData.symptoms || '',
+        
+        // Risk Assessment - ensure all fields are properly included
+        r: profileData.riskAssessment ? {
+          l: profileData.riskAssessment.level,
+          s: profileData.riskAssessment.summary || '',
+          g: profileData.riskAssessment.guidelines || [],
+          t: profileData.riskAssessment.timestamp,
+          conditions: profileData.riskAssessment.conditions || [],
+          symptoms: profileData.riskAssessment.symptoms || []
+        } : null,
+        
+        // Emergency Contacts - ensure all fields are included
+        ec: (profileData.emergencyContacts || [])
+          .map(c => ({
+            n: c.name?.slice(0, 30) || '',
+            p: c.number || '',
+            r: c.relationship || ''
+          }))
+          .filter(c => c.n && c.p), // Only include contacts with at least name and number
+        
+        // Doctor Contacts - ensure all fields are included
+        dc: (profileData.doctorContacts || [])
+          .map(d => ({
+            n: d.name?.slice(0, 30) || '',
+            p: d.number || '',
+            s: d.specialization || ''
+          }))
+          .filter(d => d.n && d.p), // Only include contacts with at least name and number
+
+        // Include emergency doctor info if available
+        ed: profileData.emergencyDoctorName ? {
+          n: profileData.emergencyDoctorName,
+          p: profileData.emergencyDoctorNumber
+        } : null,
+        
+        t: new Date().toISOString()
+      };
+
+      const encodedData = encodeURIComponent(JSON.stringify(reportData));
+      return { link: `${baseUrl}/report?data=${encodedData}`, error: null };
+    } catch (error) {
+      console.error('Error generating profile link:', error);
+      const message = error instanceof Error ? error.message : 'Failed to generate profile link';
+      return { link: baseUrl, error: message };
+    }
+  }, [profileData]);
+
+  // Update error state when the generated link changes
+  useEffect(() => {
+    setQrError(generateProfileLink.error);
+  }, [generateProfileLink]);
+
+  // The actual link to use
+  const profileLink = generateProfileLink.link;
 
   const handleCopyLink = async () => {
     try {
@@ -31,18 +117,17 @@ const QRCodePage = () => {
       toast.success("Link copied to clipboard!");
     } catch (err) {
       console.error('Failed to copy link:', err);
+      toast.error("Failed to copy link to clipboard");
     }
   };
  
   const handleDownloadQR = async () => {
     try {
-      // Find the SVG element inside the container
       const container = document.getElementById("qr-code-svg");
       const svg = container?.querySelector('svg');
 
       if (!svg) {
-        console.error("QR code SVG not found");
-        return;
+        throw new Error("QR code SVG not found");
       }
 
       // Clone the SVG to avoid modifying the original
@@ -84,14 +169,7 @@ const QRCodePage = () => {
 
           canvas.toBlob((blob) => {
             if (blob) {
-              const downloadUrl = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = downloadUrl;
-              a.download = 'pulseid-emergency-qr.png';
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
-              URL.revokeObjectURL(downloadUrl);
+              saveAs(blob, 'pulseid-emergency-qr.png');
               resolve();
             } else {
               reject(new Error('Failed to create blob'));
@@ -105,10 +183,11 @@ const QRCodePage = () => {
       img.src = url;
       await downloadPromise;
       URL.revokeObjectURL(url);
+      toast.success("QR code downloaded successfully!");
 
     } catch (error) {
       console.error('Download failed:', error);
-      toast("Failed to download QR code. Please try again.")
+      toast.error("Failed to download QR code. Please try again.")
     }
   };
 
@@ -120,8 +199,12 @@ const QRCodePage = () => {
           text: 'My emergency medical information',
           url: profileLink,
         });
+        toast.success("Profile shared successfully!");
       } catch (err) {
-        console.error('Error sharing:', err);
+        if (err instanceof Error && err.name !== 'AbortError') {
+          console.error('Error sharing:', err);
+          toast.error("Failed to share profile");
+        }
       }
     } else {
       handleCopyLink();
@@ -129,8 +212,31 @@ const QRCodePage = () => {
   };
 
   const handlePreviewReport = () => {
-    navigate(`/report?data=${encodeURIComponent(JSON.stringify(profileData))}`);
+    try {
+      // We already have the validated profile link
+      const reportUrl = new URL(profileLink);
+      const reportData = reportUrl.searchParams.get('data');
+      
+      if (!reportData) {
+        throw new Error('Failed to generate report data');
+      }
+
+      navigate(`/report?data=${reportData}`);
+    } catch (error) {
+      console.error('Error generating report preview:', error);
+      toast.error('Failed to generate report preview');
+    }
   };
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="animate-pulse">Loading...</div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
@@ -154,20 +260,27 @@ const QRCodePage = () => {
 
               <div className="bg-white p-6 rounded-lg border-2 border-slate-200 mb-6 inline-block">
                 <div id="qr-code-svg" className="p-2 bg-white">
-                  <QRCode
-                    value={profileLink}
-                    size={192}
-                    level="H"
-                    bgColor="#ffffff"
-                    fgColor="#000000"
-                  />
+                  {qrError ? (
+                    <div className="w-48 h-48 flex items-center justify-center bg-red-50 text-red-500">
+                      <AlertTriangle className="w-12 h-12" />
+                    </div>
+                  ) : (
+                    <QRCode
+                      value={profileLink}
+                      size={192}
+                      level="M"
+                      bgColor="#ffffff"
+                      fgColor="#000000"
+                    />
+                  )}
                 </div>
               </div>
 
               <div className="space-y-3">
                 <button
                   onClick={handleDownloadQR}
-                  className="w-full flex items-center justify-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg transition-colors"
+                  disabled={!!qrError}
+                  className="w-full flex items-center justify-center space-x-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white px-6 py-3 rounded-lg transition-colors"
                 >
                   <Download className="w-5 h-5" />
                   <span>Download QR Code</span>
@@ -175,7 +288,8 @@ const QRCodePage = () => {
 
                 <button
                   onClick={handleShare}
-                  className="w-full flex items-center justify-center space-x-2 bg-white border border-indigo-600 text-indigo-600 hover:bg-indigo-50 px-6 py-3 rounded-lg transition-colors"
+                  disabled={!!qrError}
+                  className="w-full flex items-center justify-center space-x-2 bg-white border border-indigo-600 text-indigo-600 hover:bg-indigo-50 disabled:bg-slate-100 disabled:border-slate-300 disabled:text-slate-400 px-6 py-3 rounded-lg transition-colors"
                 >
                   <Share2 className="w-5 h-5" />
                   <span>Share QR Code</span>
@@ -183,7 +297,8 @@ const QRCodePage = () => {
 
                 <button
                   onClick={handlePreviewReport}
-                  className="w-full flex items-center justify-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-lg transition-colors"
+                  disabled={!!qrError}
+                  className="w-full flex items-center justify-center space-x-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white px-6 py-3 rounded-lg transition-colors"
                 >
                   <Eye className="w-5 h-5" />
                   <span>Preview Medical Report</span>
@@ -191,8 +306,6 @@ const QRCodePage = () => {
               </div>
             </div>
           </div>
-
-          
 
           <div className="flex-1 space-y-6">
             <div className="medical-card">
@@ -270,8 +383,6 @@ const QRCodePage = () => {
                 </div>
               </div>
             </div>
-
-            
           </div>
         </div>
       </div>

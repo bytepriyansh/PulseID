@@ -30,12 +30,33 @@ interface AnalysisResult {
 }
 
 const RiskAI = () => {
-  const { profileData, isProfileComplete } = useProfile();
+  const { profileData, updateProfile, isProfileComplete } = useProfile();
   const router = useNavigate();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult>({});
   const [streamedText, setStreamedText] = useState('');
+
+  const handleAnalysisComplete = (result: AnalysisResult) => {
+    setAnalysisResult(result);
+    
+    // Save the risk assessment to the profile
+    const riskAssessment = {
+      level: result.riskLevel?.toUpperCase() as 'HIGH' | 'MODERATE' | 'LOW',
+      summary: result.summary || '',
+      guidelines: result.actions || [],
+      timestamp: result.completedAt || new Date().toLocaleString(),
+      conditions: profileData.conditions?.split(',').map(c => c.trim()).filter(c => c) || [],
+      symptoms: profileData.symptoms?.split(',').map(s => s.trim()).filter(s => s) || []
+    };
+    
+    updateProfile({
+      ...profileData,
+      riskAssessment
+    });
+
+    toast("Risk Assessment saved to profile");
+  };
 
   const parseGeminiResponse = (text: string): AnalysisResult => {
     try {
@@ -103,10 +124,12 @@ const RiskAI = () => {
 
 ## Patient Profile:
 ${bmi ? `BMI: ${bmi} (${bmiCategory})` : ''}
-Height: ${profileData.heightUnit === 'cm' 
+Height: ${
+  profileData.heightUnit === 'cm' 
     ? `${profileData.height} cm` 
-    : `${profileData.heightFeet || 0}'${profileData.heightInches || 0}"`}
-Weight: ${profileData.weight} ${profileData.weightUnit}
+    : `${profileData.heightFeet || 0}'${profileData.heightInches || 0}"`
+}
+Weight: ${profileData.weight} ${profileData.weightUnit || 'kg'}
 - Name: ${profileData.name}
 - Age: ${profileData.age}
 - Gender: ${profileData.gender}
@@ -162,7 +185,7 @@ Please ensure proper formatting with clear sections and avoid excessive spacing.
       });
 
       const parsedResult = parseGeminiResponse(fullResponse);
-      setAnalysisResult(parsedResult);
+      handleAnalysisComplete(parsedResult);
     } catch (error) {
       console.error('Analysis failed:', error);
       setAnalysisResult({
@@ -186,7 +209,7 @@ Please ensure proper formatting with clear sections and avoid excessive spacing.
             if (!isNaN(heightCm) && heightCm > 0) {
                 heightInMeters = heightCm / 100;
             } else {
-                console.log('Invalid CM height:', heightCm);
+                console.log('Invalid height value:', heightCm);
                 return null;
             }
         } 

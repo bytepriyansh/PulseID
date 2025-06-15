@@ -1,6 +1,5 @@
 import {
   FileText,
-  Download,
   Share2,
   Calendar,
   User,
@@ -18,637 +17,651 @@ import {
 } from 'lucide-react';
 import Layout from '../components/Layout';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { PDFDownloadLink } from '@react-pdf/renderer';
-import ReportPDF from './ReportPDF';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
-interface ProfileData {
-  name: string;
-  age: string;
-  gender: string;
-  bloodGroup: string;
-  conditions: string;
-  medications: string;
-  allergies: string;
-  symptoms: string;
-  emergencyContactName: string;
-  emergencyContactNumber: string;
-  timestamp?: string;
-}
+import type { ProfileData, RiskAssessment } from '@/contexts/ProfileContext';
 
-interface RiskAssessment {
-  level: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
-  analysisDate: string;
-  summary: string;
-  guidelines: string[];
-  vitalSigns?: {
-    bloodPressure?: string;
-    heartRate?: string;
-    temperature?: string;
-    oxygenSaturation?: string;
-  };
-}
+import { calculateBMI, formatDate, formatDateOnly } from '@/utils/formatters';
 
 const Report = () => {
+  const [profileData, setProfileData] = useState<ProfileData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Add print-specific styles when component mounts
+    const style = document.createElement('style');
+    style.innerHTML = `
+      @media print {
+        @page {
+          size: A4;
+          margin: 15mm;
+        }
+        
+        body {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          background: white !important;
+          font-size: 14px !important;
+        }
+
+        /* Hide UI elements */
+        .print\\:hidden {
+          display: none !important;
+        }
+
+        /* Container */
+        .max-w-4xl {
+          max-inline-size: none !important;
+          padding: 0 !important;
+          margin: 0 !important;
+        }
+
+        /* Header */
+        header {
+          margin-block-end: 2rem !important;
+          break-inside: avoid !important;
+        }
+
+        h1 {
+          font-size: 24px !important;
+          color: #111827 !important;
+          margin-block-end: 0.25rem !important;
+        }
+
+        header p {
+          font-size: 12px !important;
+          color: #6B7280 !important;
+        }
+
+        /* Sections */
+        section {
+          break-inside: avoid !important;
+          margin-block-end: 1.5rem !important;
+          background: white !important;
+        }
+
+        section > div:first-child {
+          padding: 1rem !important;
+          background: #F8FAFC !important;
+          border: 1px solid #E2E8F0 !important;
+          border-radius: 0.375rem !important;
+          margin-block-end: 1rem !important;
+        }
+
+        /* Section titles */
+        h2 {
+          font-size: 16px !important;
+          color: #111827 !important;
+          margin: 0 !important;
+          display: flex !important;
+          align-items: center !important;
+          gap: 0.5rem !important;
+        }
+
+        /* Grid layout */
+        .grid {
+          display: grid !important;
+          gap: 1rem !important;
+        }
+
+        /* Personal details grid */
+        .grid-cols-2.lg\\:grid-cols-4 {
+          grid-template-columns: repeat(4, 1fr) !important;
+        }
+
+        /* Metrics grid */
+        .grid-cols-2.lg\\:grid-cols-3 {
+          grid-template-columns: repeat(3, 1fr) !important;
+        }
+
+        /* Cards */
+        .bg-slate-50,
+        .bg-gradient-to-br,
+        [class*='from-'] {
+          background: white !important;
+          border: 1px solid #E2E8F0 !important;
+          padding: 1rem !important;
+          border-radius: 0.375rem !important;
+        }
+
+        /* Card labels */
+        label {
+          font-size: 12px !important;
+          color: #6B7280 !important;
+          margin-block-end: 0.25rem !important;
+        }
+
+        /* Card values */
+        p.text-xl,
+        p.text-lg {
+          font-size: 14px !important;
+          color: #111827 !important;
+          font-weight: 600 !important;
+        }
+
+        /* Contacts sections */
+        .sm\\:grid-cols-2 {
+          grid-template-columns: repeat(2, 1fr) !important;
+          gap: 1.5rem !important;
+        }
+
+        /* Contact cards */
+        .bg-red-50, .bg-blue-50 {
+          background: white !important;
+          padding: 1rem !important;
+          border-radius: 0.375rem !important;
+        }
+
+        .bg-red-50 {
+          border: 1px solid #FCA5A5 !important;
+        }
+
+        .bg-blue-50 {
+          border: 1px solid #BFDBFE !important;
+        }
+
+        /* Risk assessment */
+        .bg-red-50 .text-red-800,
+        .bg-blue-50 .text-blue-800 {
+          color: #111827 !important;
+        }
+
+        .text-red-600 {
+          color: #DC2626 !important;
+        }
+
+        .text-blue-600 {
+          color: #2563EB !important;
+        }
+
+        /* Footer */
+        footer {
+          margin-block-start: 2rem !important;
+          text-align: center !important;
+        }
+
+        footer p {
+          font-size: 12px !important;
+          color: #6B7280 !important;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
+
   const location = useLocation();
   const navigate = useNavigate();
-  const [copied, setCopied] = useState(false);
-  const [isPrinting, setIsPrinting] = useState(false);
   const searchParams = new URLSearchParams(location.search);
   const encodedData = searchParams.get('data');
 
-  // Parse the profile data from URL
-  const parseProfileData = (): ProfileData => {
+  useEffect(() => {
+    if (!encodedData) {
+      setError('No report data provided');
+      return;
+    }
+
     try {
-      return encodedData
-        ? JSON.parse(decodeURIComponent(encodedData))
-        : {
-          name: '',
-          age: '',
-          gender: 'Male',
-          bloodGroup: 'A+',
-          conditions: '',
-          medications: '',
-          allergies: '',
-          symptoms: '',
-          emergencyContactName: '',
-          emergencyContactNumber: ''
-        };
-    } catch (error) {
-      console.error('Error parsing profile data:', error);
-      return {
-        name: '',
-        age: '',
-        gender: 'Male',
-        bloodGroup: 'A+',
-        conditions: '',
-        medications: '',
-        allergies: '',
-        symptoms: '',
-        emergencyContactName: '',
-        emergencyContactNumber: ''
+      const compressed = JSON.parse(decodeURIComponent(encodedData));
+      console.log('QR Data received:', compressed);
+      console.log('Height and weight:', { height: compressed.h, weight: compressed.w });
+      
+      // Expand the compressed data back to full format
+      const decodedData: ProfileData = {
+        name: compressed.n || '',
+        age: compressed.a || '',
+        gender: compressed.g || '',
+        bloodGroup: compressed.b || '',
+        height: compressed.h,
+        heightUnit: compressed.hu,
+        weight: compressed.w,
+        weightUnit: compressed.wu,
+        conditions: compressed.c || '',
+        medications: compressed.m || '',
+        allergies: compressed.al || '',
+        symptoms: compressed.s || '',
+        // Expand emergency contacts
+        emergencyContacts: (compressed.ec || []).map(c => ({
+          name: c.n || '',
+          number: c.p || '',
+          relationship: c.r || ''
+        })),
+        // Expand doctor contacts
+        doctorContacts: (compressed.dc || []).map(d => ({
+          name: d.n || '',
+          number: d.p || '',
+          specialization: d.s || ''
+        })),
+        // Emergency doctor info
+        emergencyDoctorName: compressed.ed?.n || '',
+        emergencyDoctorNumber: compressed.ed?.p || '',
+        // Add risk assessment if present
+        riskAssessment: compressed.r ? {
+          level: compressed.r.l as 'HIGH' | 'MODERATE' | 'LOW',
+          summary: compressed.r.s || '',
+          guidelines: compressed.r.g || [],
+          timestamp: compressed.r.t || '',
+          conditions: compressed.r.conditions || [],
+          symptoms: compressed.r.symptoms || []
+        } : undefined,
+        medicalReports: [],
+        timestamp: compressed.t || new Date().toISOString()
       };
+
+      // Validate required fields
+      const requiredFields = ['name', 'age'];
+      const missingFields = requiredFields.filter(field => !decodedData[field]);
+      
+      if (missingFields.length > 0) {
+        throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
+      }
+
+      setProfileData(decodedData);
+      console.log('Decoded profile data:', decodedData); // For debugging
+    } catch (err) {
+      console.error('Error parsing report data:', err);
+      setError(err instanceof Error ? err.message : 'Invalid report data');
+    }
+  }, [encodedData]);
+
+  const getRiskLevelStyles = (level: string) => {
+    switch (level) {
+      case 'HIGH':
+        return {
+          bg: 'bg-red-50',
+          border: 'border-red-200',
+          text: 'text-red-700',
+          icon: 'text-red-500'
+        };
+      case 'MODERATE':
+        return {
+          bg: 'bg-yellow-50',
+          border: 'border-yellow-200',
+          text: 'text-yellow-700',
+          icon: 'text-yellow-500'
+        };
+      default:
+        return {
+          bg: 'bg-green-50',
+          border: 'border-green-200',
+          text: 'text-green-700',
+          icon: 'text-green-500'
+        };
     }
   };
 
-  const profileData = parseProfileData();
-
-  // Generate simulated vital signs based on conditions
-  const generateVitalSigns = (conditions: string): RiskAssessment['vitalSigns'] => {
-    const vitals: RiskAssessment['vitalSigns'] = {
-      bloodPressure: '120/80 mmHg',
-      heartRate: '72 bpm',
-      temperature: '98.6°F',
-      oxygenSaturation: '98%'
-    };
-
-    if (conditions.toLowerCase().includes('hypertension')) {
-      vitals.bloodPressure = '145/95 mmHg';
-    }
-    if (conditions.toLowerCase().includes('fever')) {
-      vitals.temperature = '101.2°F';
-    }
-    if (conditions.toLowerCase().includes('asthma') || conditions.toLowerCase().includes('copd')) {
-      vitals.oxygenSaturation = '92%';
-    }
-    if (conditions.toLowerCase().includes('tachycardia')) {
-      vitals.heartRate = '110 bpm';
-    }
-
-    return vitals;
-  };
-
-  const generateRiskAssessment = (data: ProfileData): RiskAssessment => {
-    const hasCriticalConditions = data.conditions?.toLowerCase().includes('diabetes') ||
-      data.conditions?.toLowerCase().includes('heart') ||
-      data.conditions?.toLowerCase().includes('asthma') ||
-      data.conditions?.toLowerCase().includes('stroke');
-
-    const hasSevereSymptoms = data.symptoms?.toLowerCase().includes('chest pain') ||
-      data.symptoms?.toLowerCase().includes('difficulty breathing') ||
-      data.symptoms?.toLowerCase().includes('severe bleeding');
-
-    const hasAllergies = data.allergies?.trim().length > 0;
-    const hasSymptoms = data.symptoms?.trim().length > 0;
-
-    let riskLevel: RiskAssessment['level'] = 'LOW';
-    let summary = 'No significant risk factors identified';
-    const guidelines: string[] = [];
-    const vitalSigns = generateVitalSigns(data.conditions);
-
-    if (hasSevereSymptoms) {
-      riskLevel = 'CRITICAL';
-      summary = '⚠️ EMERGENCY: Patient shows signs of potentially life-threatening conditions requiring immediate intervention';
-
-      if (data.symptoms?.toLowerCase().includes('chest pain')) {
-        guidelines.push('Immediate ECG and cardiac enzyme testing required');
-        guidelines.push('Administer aspirin 325mg if no contraindications');
-        guidelines.push('Prepare for possible STEMI protocol');
-      }
-
-      if (data.symptoms?.toLowerCase().includes('difficulty breathing')) {
-        guidelines.push('Administer supplemental oxygen to maintain SpO2 > 90%');
-        guidelines.push('Prepare for possible intubation if respiratory distress worsens');
-      }
-
-      if (data.symptoms?.toLowerCase().includes('severe bleeding')) {
-        guidelines.push('Apply direct pressure to bleeding site immediately');
-        guidelines.push('Initiate large bore IV access and prepare for possible transfusion');
-      }
-    } else if (hasCriticalConditions || hasSymptoms) {
-      riskLevel = 'HIGH';
-      summary = 'Patient has critical conditions or active symptoms requiring urgent attention';
-
-      if (data.conditions?.toLowerCase().includes('diabetes')) {
-        guidelines.push('Check blood glucose immediately (fingerstick)');
-        guidelines.push('Monitor for signs of DKA or hypoglycemia');
-        guidelines.push('Avoid medications that may affect glucose levels');
-      }
-
-      if (data.conditions?.toLowerCase().includes('asthma')) {
-        guidelines.push('Administer bronchodilators (albuterol) via nebulizer');
-        guidelines.push('Monitor oxygen saturation continuously');
-        guidelines.push('Consider systemic corticosteroids for severe cases');
-      }
-
-      if (hasSymptoms) {
-        guidelines.push('Perform complete vital signs assessment every 15 minutes');
-        guidelines.push('Establish IV access for possible medication administration');
-      }
-    } else if (hasAllergies) {
-      riskLevel = 'MODERATE';
-      summary = 'Patient has medication allergies that require special consideration';
-      guidelines.push(`STRICT AVOIDANCE of ${data.allergies} and related medications`);
-      guidelines.push('Have alternative medications prepared and verified');
-      guidelines.push('Document allergies prominently in all medical records');
-    }
-
-    return {
-      level: riskLevel,
-      analysisDate: data.timestamp
-        ? new Date(data.timestamp).toLocaleString('en-US', {
-          month: 'long',
-          day: 'numeric',
-          year: 'numeric',
-          hour: 'numeric',
-          minute: 'numeric',
-          hour12: true
-        })
-        : new Date().toLocaleString('en-US', {
-          month: 'long',
-          day: 'numeric',
-          year: 'numeric',
-          hour: 'numeric',
-          minute: 'numeric',
-          hour12: true
-        }),
-      summary,
-      guidelines,
-      vitalSigns
-    };
-  };
-
-  const riskAssessment = generateRiskAssessment(profileData);
-
-  const reportData = {
-    generatedDate: profileData.timestamp
-      ? new Date(profileData.timestamp).toLocaleDateString('en-US', {
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric'
-      })
-      : new Date().toLocaleDateString('en-US', {
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric'
-      }),
-    generatedTime: profileData.timestamp
-      ? new Date(profileData.timestamp).toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: 'numeric',
-        hour12: true
-      })
-      : new Date().toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: 'numeric',
-        hour12: true
-      }),
-    profile: {
-      name: profileData.name || 'Not provided',
-      age: profileData.age ? parseInt(profileData.age, 10) || 0 : 0,
-      gender: profileData.gender || 'Not provided',
-      bloodGroup: profileData.bloodGroup || 'Not provided',
-      conditions: profileData.conditions || 'None reported',
-      medications: profileData.medications || 'None reported',
-      allergies: profileData.allergies || 'None reported',
-      symptoms: profileData.symptoms || 'None reported',
-      emergencyContact: profileData.emergencyContactName
-        ? `${profileData.emergencyContactName} (${profileData.emergencyContactNumber || 'No number'})`
-        : 'Not provided'
-    },
-    riskAssessment
-  };
-
-  const handleShareLink = async () => {
-    const shareData = {
-      title: 'PulseID Health Report',
-      text: `Health report for ${reportData.profile.name}`,
-      url: window.location.href
-    };
-
-    if (navigator.share) {
-      try {
-        await navigator.share(shareData);
-      } catch (err) {
-        console.error('Error sharing:', err);
-      }
-    } else {
-      try {
-        await navigator.clipboard.writeText(window.location.href);
-        setCopied(true);
-        toast.success('Report link copied to clipboard!', {
-          position: 'bottom-right',
-        });
-        setTimeout(() => setCopied(false), 3000);
-      } catch (err) {
-        console.error('Failed to copy link:', err);
-        toast.error('Failed to copy link', {
-          position: 'bottom-right',
-        });
-      }
-    }
+  const formatDoctorName = (name: string | undefined) => {
+    if (!name) return 'Not specified';
+    // If name already includes "Dr.", don't add it again
+    return name.toLowerCase().startsWith('dr.') ? name : `Dr. ${name}`;
   };
 
   const handlePrint = () => {
-    setIsPrinting(true);
-    setTimeout(() => {
-      window.print();
-      setIsPrinting(false);
-    }, 500);
+    if (!profileData) {
+      toast.error('No profile data available');
+      return;
+    }
+    window.print();
   };
 
-  useEffect(() => {
-    // Scroll to top on component mount
-    window.scrollTo(0, 0);
-  }, []);
+  if (error) {
+    return (
+      <Layout hideNavigation>
+        <div className="container mx-auto px-4 py-8">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <AlertTriangle className="h-6 w-6 text-red-500 mb-2" />
+            <h2 className="text-xl font-semibold text-red-700">Error</h2>
+            <p className="text-red-600">{error}</p>
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="mt-4 inline-flex items-center text-sm text-red-600 hover:text-red-800"
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Return to Dashboard
+            </button>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (!profileData) {
+    return (
+      <Layout hideNavigation>
+        <div className="container mx-auto px-4 py-8">
+          <div className="animate-pulse">
+            <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
+            <div className="h-4 bg-gray-200 rounded w-full mb-2"></div>
+            <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  const riskStyles = getRiskLevelStyles(profileData.riskAssessment?.level || 'LOW');
 
   return (
-    <Layout>
-      <div className="max-w-4xl mx-auto px-4 py-8 print:p-0 print:max-w-none">
-        <button
-          onClick={() => navigate(-1)}
-          className="flex items-center text-indigo-600 mb-6 hover:text-indigo-800 transition-colors print:hidden"
-        >
-          <ChevronLeft className="w-5 h-5" />
-          <span>Back</span>
-        </button>
-
-        <div className="text-center mb-8 print:mb-4">
-          <div className="flex items-center justify-center space-x-3 mb-4">
-            <div className="w-12 h-12 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-xl flex items-center justify-center print:bg-emerald-500">
-              <FileText className="w-7 h-7 text-white" />
-            </div>
-            <h1 className="text-3xl font-bold text-slate-800 print:text-2xl">
-              Medical Emergency Report
-            </h1>
-          </div>
-          <p className="text-lg text-slate-600 print:text-sm print:text-slate-700">
-            Comprehensive medical profile and risk assessment summary
+    <Layout hideNavigation>
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        {/* Header */}
+        <header className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-slate-800">Medical Emergency Report</h1>
+          <p className="text-slate-500 mt-2">
+            Generated on {formatDate(profileData?.timestamp || new Date())}
           </p>
-        </div>
+        </header>
 
-        {/* Emergency Alert Banner for Critical Cases */}
-        {riskAssessment.level === 'CRITICAL' && (
-          <div className="mb-6 p-4 bg-gradient-to-r from-red-600 to-red-800 rounded-lg shadow-lg animate-pulse print:animate-none">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <AlertTriangle className="w-6 h-6 text-white" />
-                <h2 className="text-xl font-bold text-white">🚨 IMMEDIATE ACTION REQUIRED</h2>
-              </div>
-              <span className="px-3 py-1 bg-white text-red-800 rounded-full font-bold">
-                CODE RED
-              </span>
-            </div>
-            <p className="mt-2 text-white">
-              This patient requires emergency medical attention. Activate emergency protocols immediately.
-            </p>
+        {error ? (
+          <div className="text-center py-12">
+            <AlertTriangle className="w-12 h-12 mx-auto text-red-500 mb-4" />
+            <h2 className="text-2xl font-semibold text-slate-800 mb-2">Error Loading Report</h2>
+            <p className="text-slate-600">{error}</p>
           </div>
-        )}
-
-        <div className="medical-card mb-6 bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-200 print:border print:bg-white print:border-slate-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <Calendar className="w-5 h-5 text-emerald-600 print:text-slate-600" />
-              <div>
-                <p className="font-semibold text-slate-800">Report Generated</p>
-                <p className="text-sm text-slate-600 print:text-xs">
-                  {reportData.generatedDate} at {reportData.generatedTime}
-                </p>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="text-sm text-slate-600 print:text-xs">Patient ID</p>
-              <p className="font-mono text-sm text-slate-800 print:text-xs">
-                {profileData.name ? profileData.name.substring(0, 3).toUpperCase() + '-' +
-                  Math.floor(Math.random() * 9000 + 1000) : 'N/A'}
-              </p>
-            </div>
+        ) : !profileData ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
           </div>
-        </div>
-
-        <div className="medical-card mb-6 print:break-inside-avoid">
-          <div className="flex items-center space-x-2 mb-6">
-            <User className="w-6 h-6 text-slate-500" />
-            <h2 className="text-2xl font-bold text-slate-800 print:text-xl">Profile Overview</h2>
-          </div>
-
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 print:gap-4">
-            <div className="space-y-4 print:space-y-2">
-              <div className="flex items-center space-x-3 p-3 bg-slate-50 rounded-lg print:p-2 print:bg-white print:border print:border-slate-200">
-                <User className="w-5 h-5 text-slate-500" />
-                <div>
-                  <p className="text-sm text-slate-600 print:text-xs">Name</p>
-                  <p className="font-semibold text-slate-800 print:text-sm">
-                    {reportData.profile.name}
-                  </p>
-                </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Personal Information */}
+            <section className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div className="px-6 py-4 bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+                <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                  <User className="w-5 h-5 text-indigo-600" />
+                  Personal Details
+                </h2>
               </div>
-
-              <div className="flex items-center space-x-3 p-3 bg-slate-50 rounded-lg print:p-2 print:bg-white print:border print:border-slate-200">
-                <Calendar className="w-5 h-5 text-slate-500" />
-                <div>
-                  <p className="text-sm text-slate-600 print:text-xs">Age</p>
-                  <p className="font-semibold text-slate-800 print:text-sm">
-                    {reportData.profile.age} years
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4 print:space-y-2">
-              <div className="flex items-center space-x-3 p-3 bg-slate-50 rounded-lg print:p-2 print:bg-white print:border print:border-slate-200">
-                <Droplets className="w-5 h-5 text-red-500" />
-                <div>
-                  <p className="text-sm text-slate-600 print:text-xs">Blood Group</p>
-                  <p className="font-semibold text-slate-800 print:text-sm">
-                    {reportData.profile.bloodGroup}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-3 p-3 bg-slate-50 rounded-lg print:p-2 print:bg-white print:border print:border-slate-200">
-                <Heart className="w-5 h-5 text-slate-500" />
-                <div>
-                  <p className="text-sm text-slate-600 print:text-xs">Gender</p>
-                  <p className="font-semibold text-slate-800 print:text-sm">
-                    {reportData.profile.gender}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4 print:space-y-2">
-              <div className="flex items-center space-x-3 p-3 bg-yellow-50 rounded-lg border border-yellow-200 print:p-2 print:bg-white print:border print:border-yellow-200">
-                <AlertTriangle className="w-5 h-5 text-yellow-600" />
-                <div>
-                  <p className="text-sm text-yellow-700 print:text-xs">Allergies</p>
-                  <p className="font-semibold text-yellow-800 print:text-sm">
-                    {reportData.profile.allergies}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-3 p-3 bg-blue-50 rounded-lg border border-blue-200 print:p-2 print:bg-white print:border print:border-blue-200">
-                <Pill className="w-5 h-5 text-blue-600" />
-                <div>
-                  <p className="text-sm text-blue-700 print:text-xs">Medications</p>
-                  <p className="font-semibold text-blue-800 print:text-sm">
-                    {reportData.profile.medications}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid sm:grid-cols-2 gap-4 mt-6 pt-6 border-t border-slate-200 print:mt-4 print:pt-4 print:gap-3">
-            <div className="p-4 bg-red-50 rounded-lg border border-red-200 print:p-3 print:bg-white print:border print:border-red-200">
-              <h4 className="font-semibold text-red-800 mb-2 print:text-sm">Medical Conditions</h4>
-              <p className="text-red-700 print:text-sm">{reportData.profile.conditions}</p>
-            </div>
-
-            <div className="p-4 bg-orange-50 rounded-lg border border-orange-200 print:p-3 print:bg-white print:border print:border-orange-200">
-              <h4 className="font-semibold text-orange-800 mb-2 print:text-sm">Current Symptoms</h4>
-              <p className="text-orange-700 print:text-sm">{reportData.profile.symptoms}</p>
-            </div>
-
-            <div className="p-4 bg-purple-50 rounded-lg border border-purple-200 print:p-3 print:bg-white print:border print:border-purple-200">
-              <h4 className="font-semibold text-purple-800 mb-2 print:text-sm">Emergency Contact</h4>
-              <p className="text-purple-700 print:text-sm">{reportData.profile.emergencyContact}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Vital Signs Section */}
-        {riskAssessment.vitalSigns && (
-          <div className="medical-card mb-6 print:break-inside-avoid">
-            <div className="flex items-center space-x-2 mb-6">
-              <Activity className="w-6 h-6 text-blue-500" />
-              <h2 className="text-2xl font-bold text-slate-800 print:text-xl">Vital Signs</h2>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:gap-3">
-              <div className="p-3 bg-white rounded-lg border border-slate-200 shadow-sm print:shadow-none">
-                <div className="flex items-center space-x-2 mb-2">
-                  <Thermometer className="w-5 h-5 text-blue-600" />
-                  <span className="text-sm font-medium text-slate-600 print:text-xs">Temperature</span>
-                </div>
-                <p className="text-xl font-bold text-slate-800 print:text-lg">
-                  {riskAssessment.vitalSigns.temperature}
-                </p>
-              </div>
-
-              <div className="p-3 bg-white rounded-lg border border-slate-200 shadow-sm print:shadow-none">
-                <div className="flex items-center space-x-2 mb-2">
-                  <Activity className="w-5 h-5 text-red-600" />
-                  <span className="text-sm font-medium text-slate-600 print:text-xs">Blood Pressure</span>
-                </div>
-                <p className="text-xl font-bold text-slate-800 print:text-lg">
-                  {riskAssessment.vitalSigns.bloodPressure}
-                </p>
-              </div>
-
-              <div className="p-3 bg-white rounded-lg border border-slate-200 shadow-sm print:shadow-none">
-                <div className="flex items-center space-x-2 mb-2">
-                  <Heart className="w-5 h-5 text-purple-600" />
-                  <span className="text-sm font-medium text-slate-600 print:text-xs">Heart Rate</span>
-                </div>
-                <p className="text-xl font-bold text-slate-800 print:text-lg">
-                  {riskAssessment.vitalSigns.heartRate}
-                </p>
-              </div>
-
-              <div className="p-3 bg-white rounded-lg border border-slate-200 shadow-sm print:shadow-none">
-                <div className="flex items-center space-x-2 mb-2">
-                  <Droplets className="w-5 h-5 text-emerald-600" />
-                  <span className="text-sm font-medium text-slate-600 print:text-xs">SpO2</span>
-                </div>
-                <p className="text-xl font-bold text-slate-800 print:text-lg">
-                  {riskAssessment.vitalSigns.oxygenSaturation}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="medical-card mb-6 print:break-inside-avoid">
-          <div className="flex items-center space-x-2 mb-6">
-            <Brain className="w-6 h-6 text-purple-500" />
-            <h2 className="text-2xl font-bold text-slate-800 print:text-xl">
-              🧠 RiskAI Assessment
-            </h2>
-          </div>
-
-          <div className={`flex items-center justify-between mb-6 p-4 rounded-lg border ${riskAssessment.level === 'CRITICAL'
-            ? 'bg-gradient-to-r from-red-600 to-red-700 text-white'
-            : riskAssessment.level === 'HIGH'
-              ? 'bg-gradient-to-r from-red-50 to-red-100 border-red-200'
-              : riskAssessment.level === 'MODERATE'
-                ? 'bg-gradient-to-r from-yellow-50 to-yellow-100 border-yellow-200'
-                : 'bg-gradient-to-r from-green-50 to-green-100 border-green-200'
-            } print:bg-white print:border print:border-slate-200`}>
-            <div className="flex items-center space-x-3">
-              <div className={`w-12 h-12 rounded-full flex items-center justify-center ${riskAssessment.level === 'CRITICAL'
-                ? 'bg-white text-red-600'
-                : riskAssessment.level === 'HIGH'
-                  ? 'bg-red-500'
-                  : riskAssessment.level === 'MODERATE'
-                    ? 'bg-yellow-500'
-                    : 'bg-green-500'
-                }`}>
-                <AlertTriangle className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className={`text-lg font-bold ${riskAssessment.level === 'CRITICAL' ? 'text-white' : 'text-slate-800'} print:text-slate-800`}>
-                  Risk Level
-                </h3>
-                <span className={`px-3 py-1 rounded-full text-sm font-semibold ${riskAssessment.level === 'CRITICAL'
-                  ? 'bg-white text-red-600'
-                  : riskAssessment.level === 'HIGH'
-                    ? 'bg-red-100 text-red-800'
-                    : riskAssessment.level === 'MODERATE'
-                      ? 'bg-yellow-100 text-yellow-800'
-                      : 'bg-green-100 text-green-800'
-                  }`}>
-                  {riskAssessment.level === 'CRITICAL' ? '🚨 CRITICAL EMERGENCY' :
-                    riskAssessment.level === 'HIGH' ? '🛑 HIGH RISK' :
-                      riskAssessment.level === 'MODERATE' ? '⚠️ MODERATE RISK' : '✅ LOW RISK'}
-                </span>
-              </div>
-            </div>
-            <div className={`text-right ${riskAssessment.level === 'CRITICAL' ? 'text-white' : 'text-slate-600'} print:text-slate-600`}>
-              <div className="flex items-center space-x-2 text-sm">
-                <Clock className="w-4 h-4" />
-                <span>{riskAssessment.analysisDate}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200 print:bg-white print:border print:border-slate-200">
-            <h4 className="font-semibold text-slate-800 mb-3 print:text-sm">AI Analysis Summary</h4>
-            <p className="text-slate-700 leading-relaxed print:text-sm">
-              {riskAssessment.summary}
-            </p>
-          </div>
-
-          <div>
-            <h4 className="font-semibold text-slate-800 mb-4 print:text-sm">
-              Emergency Treatment Guidelines
-            </h4>
-            <div className="space-y-3 print:space-y-2">
-              {riskAssessment.guidelines.length > 0 ? (
-                riskAssessment.guidelines.map((guideline, index) => (
-                  <div key={index} className="flex items-start space-x-3 p-3 bg-emerald-50 rounded-lg border border-emerald-200 print:p-2 print:bg-white print:border print:border-slate-200">
-                    <div className="flex items-center justify-center w-6 h-6 bg-emerald-500 rounded-full text-white text-sm font-bold flex-shrink-0 print:bg-emerald-600">
-                      {index + 1}
-                    </div>
-                    <p className="text-emerald-800 print:text-sm print:text-slate-700">
-                      {guideline}
+              
+              {/* Basic Info Cards */}
+              <div className="p-6 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
+                    <label className="text-sm font-medium text-slate-600 mb-1 block">Name</label>
+                    <p className="text-xl font-bold text-slate-800">{profileData.name}</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
+                    <label className="text-sm font-medium text-slate-600 mb-1 block">Age</label>
+                    <p className="text-xl font-bold text-slate-800">{profileData.age}</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
+                    <label className="text-sm font-medium text-slate-600 mb-1 block">Gender</label>
+                    <p className="text-xl font-bold text-slate-800">{profileData.gender || 'Not specified'}</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
+                    <label className="text-sm font-medium text-slate-600 mb-1 block">Blood Group</label>
+                    <p className="text-xl font-bold text-slate-800">{profileData.bloodGroup || 'Not specified'}</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
+                    <label className="text-sm font-medium text-slate-600 mb-1 block">BMI</label>
+                    <p className="text-xl font-bold text-slate-800">
+                      {(() => {
+                        console.log('Profile Data for BMI:', {
+                          height: profileData.height,
+                          weight: profileData.weight,
+                          heightUnit: profileData.heightUnit,
+                          weightUnit: profileData.weightUnit
+                        });
+                        return calculateBMI(
+                          profileData.height,
+                          profileData.weight,
+                          profileData.heightUnit || 'cm',
+                          profileData.weightUnit || 'kg'
+                        );
+                      })()}
                     </p>
                   </div>
-                ))
-              ) : (
-                <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-slate-600 print:p-2 print:bg-white">
-                  No specific treatment guidelines required based on current assessment.
                 </div>
-              )}
-            </div>
-          </div>
-        </div>
+              </div>
+            </section>
 
-        <div className="medical-card print:hidden">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4">Report Actions</h3>
-          <div className="flex flex-col sm:flex-row gap-4">
-            <PDFDownloadLink
-              document={<ReportPDF reportData={reportData} />}
-              fileName={`medical-report-${reportData.profile.name || 'patient'}.pdf`}
-              className="flex-1"
-            >
-              {({ loading }) => (
+            {/* Medical Information */}
+            <section className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div className="px-6 py-4 bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+                <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                  <Heart className="w-5 h-5 text-rose-600" />
+                  Medical Information
+                </h2>
+              </div>
+              <div className="p-6 grid gap-6">
+                <div className="grid sm:grid-cols-2 gap-6">
+                  <div className="bg-rose-50 rounded-lg p-4 border border-rose-100">
+                    <label className="text-sm font-medium text-rose-600 block mb-2">Medical Conditions</label>
+                    <p className="text-base font-bold text-rose-900 whitespace-pre-wrap">
+                      {profileData.conditions || 'None reported'}
+                    </p>
+                  </div>
+                  <div className="bg-amber-50 rounded-lg p-4 border border-amber-100">
+                    <label className="text-sm font-medium text-amber-600 block mb-2">Allergies</label>
+                    <p className="text-base font-bold text-amber-900 whitespace-pre-wrap">
+                      {profileData.allergies || 'None reported'}
+                    </p>
+                  </div>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-6">
+                  <div className="bg-purple-50 rounded-lg p-4 border border-purple-100">
+                    <label className="text-sm font-medium text-purple-600 block mb-2">Current Medications</label>
+                    <p className="text-base font-bold text-purple-900 whitespace-pre-wrap">
+                      {profileData.medications || 'None reported'}
+                    </p>
+                  </div>
+                  <div className="bg-emerald-50 rounded-lg p-4 border border-emerald-100">
+                    <label className="text-sm font-medium text-emerald-600 block mb-2">Current Symptoms</label>
+                    <p className="text-base font-bold text-emerald-900 whitespace-pre-wrap">
+                      {profileData.symptoms || 'None reported'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Emergency and Healthcare Contacts - Side by Side */}
+            <div className="grid sm:grid-cols-2 gap-6">
+              {/* Emergency Contacts */}
+              <section className="bg-red-50 rounded-xl border border-red-200 overflow-hidden">
+                <div className="px-6 py-4 border-b border-red-200">
+                  <h2 className="text-xl font-bold text-red-800 flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-red-600" />
+                    Emergency Contacts
+                  </h2>
+                </div>
+                <div className="p-6">
+                  <div className="space-y-4">
+                    {profileData.emergencyContacts?.map((contact, index) => (
+                      <div key={index} className="bg-white rounded-lg border border-red-100 p-4">
+                        <p className="font-bold text-red-800 text-lg">{contact.name}</p>
+                        <p className="font-semibold text-red-600">{contact.number}</p>
+                        <p className="text-sm font-medium text-red-500">{contact.relationship}</p>
+                      </div>
+                    ))}
+                    {(!profileData.emergencyContacts || profileData.emergencyContacts.length === 0) && (
+                      <p className="text-red-600 font-medium">No emergency contacts provided</p>
+                    )}
+                  </div>
+                </div>
+              </section>
+
+              {/* Healthcare Providers */}
+              <section className="bg-blue-50 rounded-xl border border-blue-200 overflow-hidden">
+                <div className="px-6 py-4 border-b border-blue-200">
+                  <h2 className="text-xl font-bold text-blue-800 flex items-center gap-2">
+                    <Pill className="w-5 h-5 text-blue-600" />
+                    Healthcare Providers
+                  </h2>
+                </div>
+                <div className="p-6">
+                  <div className="space-y-4">
+                    {profileData.doctorContacts?.map((doctor, index) => (
+                      <div key={index} className="bg-white rounded-lg border border-blue-100 p-4">
+                        <p className="font-bold text-blue-800 text-lg">{doctor.name}</p>
+                        <p className="font-semibold text-blue-600">{doctor.number}</p>
+                        <p className="text-sm font-medium text-blue-500">{doctor.specialization}</p>
+                      </div>
+                    ))}
+                    {(!profileData.doctorContacts || profileData.doctorContacts.length === 0) && (
+                      <p className="text-blue-600 font-medium">No healthcare providers listed</p>
+                    )}
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            {/* Risk Assessment - Moved to Bottom */}
+            {profileData.riskAssessment && (
+              <section className={`rounded-xl border overflow-hidden ${getRiskLevelStyles(profileData.riskAssessment.level).bg} ${getRiskLevelStyles(profileData.riskAssessment.level).border}`}>
+                <div className="px-6 py-4 border-b border-opacity-20">
+                  <h2 className={`text-xl font-bold flex items-center gap-2 ${getRiskLevelStyles(profileData.riskAssessment.level).text}`}>
+                    <Activity className={`w-5 h-5 ${getRiskLevelStyles(profileData.riskAssessment.level).icon}`} />
+                    Risk Assessment & Critical Care Information
+                  </h2>
+                </div>
+                <div className="p-6 space-y-6">
+                  {/* Risk Level and Date */}
+                  <div className="flex items-center justify-between">
+                    <span className={`px-4 py-2 rounded-full text-base font-bold ${getRiskLevelStyles(profileData.riskAssessment.level).bg} ${getRiskLevelStyles(profileData.riskAssessment.level).text}`}>
+                      {profileData.riskAssessment.level} RISK PATIENT
+                    </span>
+
+                  </div>
+
+                  {/* Medical Alert Box */}
+                  <div className="bg-white bg-opacity-50 rounded-lg p-4 border border-orange-200">
+                    <h3 className="text-lg font-bold text-orange-800 mb-2">⚠️ Critical Medical Information</h3>
+                    <p className="text-base font-semibold text-orange-900">
+                      {profileData.riskAssessment.summary}
+                    </p>
+                  </div>
+
+                  {/* Emergency Care Guidelines */}
+                  <div className="space-y-4">
+                    <h3 className={`text-lg font-bold ${getRiskLevelStyles(profileData.riskAssessment.level).text}`}>
+                      Emergency Care Instructions
+                    </h3>
+                    
+                    {/* Primary Concerns */}
+                    <div className="bg-white bg-opacity-50 rounded-lg p-4 border border-red-200">
+                      <h4 className="text-base font-bold text-red-800 mb-2">Primary Medical Concerns:</h4>
+                      <ul className="list-disc pl-5 space-y-1">
+                        {profileData.riskAssessment.conditions.map((condition, index) => (
+                          <li key={index} className="text-base font-medium text-red-900">
+                            {condition}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {/* Emergency Protocol */}
+                    <div className="bg-white bg-opacity-50 rounded-lg p-4">
+                      <h4 className="text-base font-bold text-slate-800 mb-2">Emergency Protocol:</h4>
+                      <ul className="space-y-3">
+                        <li className="flex items-start gap-2">
+                          <Shield className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                          <p className="text-base font-medium text-slate-800">
+                            Check for medical ID bracelet/necklace - Patient has multiple pre-existing conditions
+                          </p>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                          <p className="text-base font-medium text-slate-800">
+                            Monitor vital signs closely - History of {profileData.conditions}
+                          </p>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <Pill className="w-5 h-5 text-purple-600 mt-0.5 flex-shrink-0" />
+                          <p className="text-base font-medium text-slate-800">
+                            Check for allergies before administering medication - Patient has allergies to: {profileData.allergies || 'None reported'}
+                          </p>
+                        </li>
+                        {profileData.medications && (
+                          <li className="flex items-start gap-2">
+                            <Activity className="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+                            <p className="text-base font-medium text-slate-800">
+                              Current Medications: {profileData.medications}
+                            </p>
+                          </li>
+                        )}
+                      </ul>
+                    </div>
+
+                    {/* Emergency Response Guidelines */}
+                    <div className="bg-white bg-opacity-50 rounded-lg p-4 border border-blue-200">
+                      <h4 className="text-base font-bold text-blue-800 mb-2">Emergency Response Guidelines:</h4>
+                      <ul className="space-y-2">
+                        <li className="flex items-start gap-2">
+                          <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <span className="font-bold text-blue-600">1</span>
+                          </div>
+                          <p className="text-base font-medium text-slate-800">
+                            Contact emergency contact immediately (See contacts above)
+                          </p>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <span className="font-bold text-blue-600">2</span>
+                          </div>
+                          <p className="text-base font-medium text-slate-800">
+                            Notify primary physician {formatDoctorName(profileData.doctorContacts?.[0]?.name)} of the emergency
+                          </p>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <span className="font-bold text-blue-600">3</span>
+                          </div>
+                          <p className="text-base font-medium text-slate-800">
+                            Share this medical report with emergency responders
+                          </p>
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* Action Buttons */}
+            <div className="mt-8 flex flex-col sm:flex-row justify-center gap-4 print:hidden">
+              {/* Print Button */}
+              <div className="flex items-center gap-2 print:hidden">
                 <button
-                  disabled={loading}
-                  className={`w-full flex items-center justify-center space-x-2 px-6 py-3 rounded-lg transition-colors ${loading
-                    ? 'bg-indigo-400 text-white'
-                    : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                    }`}
+                  onClick={handlePrint}
+                  className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-200"
                 >
-                  <Download className="w-5 h-5" />
-                  <span>{loading ? 'Generating PDF...' : 'Download as PDF'}</span>
+                  <FileText className="h-4 w-4" />
+                  Print
                 </button>
-              )}
-            </PDFDownloadLink>
+              </div>
 
-            <button
-              onClick={handlePrint}
-              className="flex-1 flex items-center justify-center space-x-2 bg-white border border-indigo-600 text-indigo-600 hover:bg-indigo-50 px-6 py-3 rounded-lg transition-colors"
-              disabled={isPrinting}
-            >
-              <FileText className="w-5 h-5" />
-              <span>{isPrinting ? 'Preparing...' : 'Print Report'}</span>
-            </button>
-
-            <button
-              onClick={handleShareLink}
-              className="flex-1 flex items-center justify-center space-x-2 bg-white border border-indigo-600 text-indigo-600 hover:bg-indigo-50 px-6 py-3 rounded-lg transition-colors"
-            >
-              {copied ? <Clipboard className="w-5 h-5" /> : <Share2 className="w-5 h-5" />}
-              <span>{copied ? 'Copied!' : 'Share Link'}</span>
-            </button>
-          </div>
-
-          <div className="mt-4 p-3 bg-slate-50 rounded-lg">
-            <div className="flex items-start space-x-3">
-              <Shield className="w-5 h-5 text-slate-500 flex-shrink-0" />
-              <p className="text-sm text-slate-600">
-                <strong className="font-semibold">Confidentiality Notice:</strong> This report contains
-                protected health information (PHI) under HIPAA regulations. Unauthorized disclosure is
-                prohibited by law. Ensure proper authorization before sharing.
-              </p>
+              {/* Share Button */}
+              <button
+                onClick={() => {
+                  if (navigator.share) {
+                    navigator.share({
+                      title: 'Medical Emergency Report',
+                      text: `Medical Emergency Report for ${profileData.name}`,
+                      url: window.location.href
+                    });
+                  } else {
+                    navigator.clipboard.writeText(window.location.href);
+                    toast.success('Report link copied to clipboard');
+                  }
+                }}
+                className="flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors"
+              >
+                <Share2 className="w-5 h-5" />
+                Share Report
+              </button>
             </div>
-          </div>
-        </div>
 
-        <div className="hidden print:block mt-8 pt-4 border-t border-slate-300 text-xs text-slate-500">
-          <div className="flex justify-between">
-            <div>
-              <p>Generated by PulseID Medical System</p>
-            </div>
-            <div className="text-right">
-              <p>Page 1 of 1</p>
-              <p>Printed on {new Date().toLocaleDateString()}</p>
-            </div>
+            <footer className="text-center text-sm text-slate-500">
+              <p className="font-medium">Report generated by PulseID Emergency Medical System</p>
+              <p className="mt-1">Generated on {formatDate(profileData.timestamp || new Date())}</p>
+            </footer>
           </div>
-        </div>
+        )}
       </div>
     </Layout>
   );

@@ -613,8 +613,9 @@ const Profile = () => {
     };
 
     const isProfileComplete = () => {
-        const requiredFields = ['name', 'age', 'gender', 'bloodGroup', 'emergencyContactName', 'emergencyContactNumber'];
-        return requiredFields.every(field => !!formData[field]);
+        const requiredFields = ['name', 'age', 'gender', 'bloodGroup'];
+        const hasEmergencyContacts = formData.emergencyContacts && formData.emergencyContacts.length > 0;
+        return requiredFields.every(field => !!formData[field]) && hasEmergencyContacts;
     };
 
     if (isLoading) {

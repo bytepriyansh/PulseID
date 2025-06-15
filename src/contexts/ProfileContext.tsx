@@ -25,6 +25,15 @@ export interface DoctorContact {
     specialization: string;
 }
 
+export interface RiskAssessment {
+    level: 'HIGH' | 'MODERATE' | 'LOW';
+    summary: string;
+    guidelines: string[];
+    timestamp: string;
+    conditions: string[];
+    symptoms: string[];
+}
+
 export interface ProfileData {
     id?: string; // Unique identifier for the profile
     name: string;
@@ -46,6 +55,12 @@ export interface ProfileData {
     emergencyDoctorName: string;
     emergencyDoctorNumber: string;
     medicalReports: MedicalReport[];
+    riskAssessment?: RiskAssessment;
+    timestamp?: string; // Add timestamp for report generation
+    // Additional fields for medical report
+    medicalConditions?: string[];
+    emergencyGuidelines?: string[];
+    doctors?: DoctorContact[];
 }
 
 interface ProfileContextType {
@@ -92,16 +107,32 @@ const isDoctorContactArray = (value: any): value is DoctorContact[] => {
     );
 };
 
+// Helper function to check if a value is a RiskAssessment
+const isRiskAssessment = (value: any): value is RiskAssessment => {
+    return typeof value === 'object' &&
+        value !== null &&
+        'level' in value &&
+        'summary' in value &&
+        'guidelines' in value &&
+        'timestamp' in value;
+};
+
 // Helper function to check if a field is empty
-const isFieldEmpty = (value: string | MedicalReport[] | EmergencyContact[] | DoctorContact[]): boolean => {
+const isFieldEmpty = (value: string | MedicalReport[] | EmergencyContact[] | DoctorContact[] | RiskAssessment | undefined): boolean => {
+    if (value === undefined) {
+        return true;
+    }
     if (Array.isArray(value)) {
         return value.length === 0;
+    }
+    if (typeof value === 'object') {
+        return Object.keys(value).length === 0;
     }
     return !value || value.trim() === '';
 };
 
 // Helper function to check if a field is filled
-const isFieldFilled = (value: string | MedicalReport[] | EmergencyContact[] | DoctorContact[]): boolean => {
+const isFieldFilled = (value: string | MedicalReport[] | EmergencyContact[] | DoctorContact[] | RiskAssessment | undefined): boolean => {
     return !isFieldEmpty(value);
 };
 
@@ -110,6 +141,12 @@ const defaultProfileData: ProfileData = {
     age: '',
     gender: 'Male',
     bloodGroup: 'A+',
+    height: '',
+    heightUnit: 'cm',
+    heightFeet: '',
+    heightInches: '',
+    weight: '',
+    weightUnit: 'kg',
     conditions: '',
     medications: '',
     allergies: '',
@@ -118,7 +155,9 @@ const defaultProfileData: ProfileData = {
     doctorContacts: [],
     emergencyDoctorName: '',
     emergencyDoctorNumber: '',
-    medicalReports: []
+    medicalReports: [],
+    riskAssessment: undefined,
+    timestamp: undefined
 };
 
 const ProfileContext = createContext<ProfileContextType | undefined>(undefined);
@@ -189,6 +228,12 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
         const requiredFields: (keyof ProfileData)[] = ['name', 'age', 'gender', 'bloodGroup'];
         return requiredFields.every(field => {
             const value = profileData[field];
+            if (Array.isArray(value)) {
+                return value.length > 0;
+            }
+            if (typeof value === 'object' && value !== null) {
+                return Object.keys(value).length > 0;
+            }
             return typeof value === 'string' && value.trim() !== '';
         });
     };
@@ -196,24 +241,36 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
     const getProfileCompleteness = () => {
         const allFields = Object.keys(profileData) as (keyof ProfileData)[];
         const filledFields = allFields.filter(field => {
-            if (field === 'medicalReports') {
-                return profileData.medicalReports.length > 0;
-            }
             const value = profileData[field];
+            if (field === 'riskAssessment') {
+                return isRiskAssessment(value);
+            }
+            if (Array.isArray(value)) {
+                return value.length > 0;
+            }
+            if (typeof value === 'object' && value !== null) {
+                return Object.keys(value).length > 0;
+            }
             return typeof value === 'string' && value.trim() !== '';
         });
         return Math.round((filledFields.length / allFields.length) * 100);
     };
 
     const isEmptyField = (field: keyof ProfileData) => {
-        if (field === 'medicalReports') {
-            return profileData.medicalReports.length === 0;
-        }
         const value = profileData[field];
+        if (field === 'riskAssessment') {
+            return !isRiskAssessment(value);
+        }
+        if (Array.isArray(value)) {
+            return value.length === 0;
+        }
+        if (typeof value === 'object' && value !== null) {
+            return Object.keys(value).length === 0;
+        }
         return typeof value !== 'string' || value.trim() === '';
     };
 
-    const isFieldFilled = (field: keyof ProfileData) => !isEmptyField(field);
+    const checkFieldFilled = (field: keyof ProfileData) => !isEmptyField(field);
 
     return (
         <ProfileContext.Provider value={{
@@ -229,7 +286,7 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
     );
 };
 
-// eslint-disable-next-line react-refresh/only-export-components
+// Hook for using profile context
 export const useProfile = () => {
     const context = useContext(ProfileContext);
     if (context === undefined) {
@@ -238,24 +295,43 @@ export const useProfile = () => {
     return context;
 };
 
-// Additional utility hooks
-// eslint-disable-next-line react-refresh/only-export-components
+// Hook for checking profile completeness
 export const useProfileCompleteness = () => {
     const { profileData } = useProfile();
 
     const getCompleteness = () => {
         const allFields = Object.keys(profileData) as (keyof ProfileData)[];
-        const filledFields = allFields.filter(field =>
-            isFieldFilled(profileData[field])
-        );
+        const filledFields = allFields.filter(field => {
+            const value = profileData[field];
+            if (field === 'riskAssessment') {
+                return isRiskAssessment(value);
+            }
+            if (Array.isArray(value)) {
+                return value.length > 0;
+            }
+            if (typeof value === 'object' && value !== null) {
+                return Object.keys(value).length > 0;
+            }
+            return typeof value === 'string' && value.trim() !== '';
+        });
         return Math.round((filledFields.length / allFields.length) * 100);
     };
 
     const getMissingFields = () => {
         const allFields = Object.keys(profileData) as (keyof ProfileData)[];
-        return allFields.filter(field =>
-            isFieldEmpty(profileData[field])
-        );
+        return allFields.filter(field => {
+            const value = profileData[field];
+            if (field === 'riskAssessment') {
+                return !isRiskAssessment(value);
+            }
+            if (Array.isArray(value)) {
+                return value.length === 0;
+            }
+            if (typeof value === 'object' && value !== null) {
+                return Object.keys(value).length === 0;
+            }
+            return typeof value !== 'string' || value.trim() === '';
+        });
     };
 
     return {
