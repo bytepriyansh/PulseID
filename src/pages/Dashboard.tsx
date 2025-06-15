@@ -4,21 +4,8 @@ import { MedicationProvider } from '@/contexts/MedicationContext';
 import { MedicationReminderDialog } from '@/components/MedicationReminderDialog';
 import Navigation from '@/components/Navigation';
 
-// Mock ProfileContext for demonstration
-const useProfile = () => ({
-  profileData: {
-    name: 'Kaushal Singh',
-    age: 28,
-    gender: 'Male',
-    bloodGroup: 'B+',
-    emergencyContactName: 'Priya Singh',
-    emergencyContactNumber: '+91 98765 43210',
-    conditions: 'Diabetes Type 2',
-    medications: 'Metformin 500mg',
-    allergies: 'Penicillin',
-    lastUpdated: '2025-06-10'
-  }
-});
+// Import actual ProfileContext
+import { useProfile } from '@/contexts/ProfileContext';
 
 const DashboardContent = () => {
   const { profileData } = useProfile();
@@ -35,6 +22,7 @@ const DashboardContent = () => {
   };
 
   const isProfileComplete = () => {
+    if (!profileData) return false;
     const requiredFields = ['name', 'age', 'gender', 'bloodGroup', 'emergencyContactName', 'emergencyContactNumber'];
     return requiredFields.every(field => !!profileData[field]);
   };
@@ -90,11 +78,25 @@ const DashboardContent = () => {
         {/* Welcome Section */}
         <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-2xl p-6 mb-8 border border-blue-100 shadow-sm">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Welcome, {profileData.name?.split(' ')[0] || 'User'}! 👋
+            Welcome{profileData?.name ? `, ${profileData.name}` : ''}! 👋
           </h1>
-          <p className="text-gray-600 max-w-2xl">
-            Monitor your health information and access emergency medical details quickly.
-          </p>
+          {!profileData?.name ? (
+            <div className="space-y-2">
+              <p className="text-gray-600">
+                Complete your profile to get personalized health insights and emergency services.
+              </p>
+              <button
+                onClick={() => window.location.href = '/profile'}
+                className="text-sm font-medium text-blue-600 hover:text-blue-700 inline-flex items-center"
+              >
+                Set up profile <Link className="w-4 h-4 ml-1" />
+              </button>
+            </div>
+          ) : (
+            <p className="text-gray-600 max-w-2xl">
+              Monitor your health information and access emergency medical details quickly.
+            </p>
+          )}
         </div>
 
         {/* Main Dashboard Cards */}
@@ -126,8 +128,10 @@ const DashboardContent = () => {
           <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Last Profile Update</p>
-                <p className="font-semibold text-gray-900">{profileData.lastUpdated || 'Never'}</p>
+                <p className="text-sm text-gray-500">Profile Status</p>
+                <p className="font-semibold text-gray-900">
+                  {profileData ? (isProfileComplete() ? 'Complete' : 'Incomplete') : 'Not Started'}
+                </p>
               </div>
               <Clock className="w-8 h-8 text-blue-500" />
             </div>
@@ -137,7 +141,9 @@ const DashboardContent = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500">QR Code Status</p>
-                <p className="font-semibold text-gray-900">Active & Ready</p>
+                <p className="font-semibold text-gray-900">
+                  {isProfileComplete() ? 'Active & Ready' : 'Complete profile to activate'}
+                </p>
               </div>
               <Zap className="w-8 h-8 text-purple-500" />
             </div>
